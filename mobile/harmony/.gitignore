@@ -1,0 +1,12 @@
+/.hvigor/
+/.idea/
+/build/
+/oh_modules/
+/entry/.preview/
+/entry/build/
+/entry/oh_modules/
+/entry/src/main/resources/rawfile/assets/
+/entry/src/main/resources/rawfile/bundle.harmony.js
+*.p12
+*.cer
+*.p7b

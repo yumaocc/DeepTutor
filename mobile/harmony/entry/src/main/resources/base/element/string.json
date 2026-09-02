@@ -1,0 +1,17 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "DeepTutor mobile application"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "DeepTutor"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DeepTutor"
+    }
+  ]
+}
+

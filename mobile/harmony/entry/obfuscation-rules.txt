@@ -1,0 +1,3 @@
+# DeepTutor currently keeps release obfuscation disabled. Add keep rules here
+# before enabling it in entry/build-profile.json5.
+

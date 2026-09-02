@@ -1,0 +1,21 @@
+export const tokens = {
+  color: {
+    canvas: '#F3F8F9',
+    surface: '#FAFCFD',
+    surfaceMuted: '#E8EEF0',
+    ink: '#151C1E',
+    body: '#41494C',
+    muted: '#585F61',
+    border: '#C4CCCF',
+    primary: '#215DA5',
+    primaryPressed: '#154D8C',
+    primaryMuted: '#E8EFF9',
+    onPrimary: '#F6F9FA',
+    error: '#BE222A',
+    errorSoft: '#FCEBEC',
+  },
+  space: {xs: 8, sm: 12, md: 16, lg: 24, xl: 32},
+  radius: {sm: 8, md: 12, lg: 16, full: 999},
+  size: {touch: 48, composer: 56},
+  type: {caption: 12, label: 14, body: 15, reading: 16, title: 20},
+} as const;
