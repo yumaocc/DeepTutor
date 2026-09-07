@@ -9,12 +9,12 @@ import React, {
 } from 'react';
 
 import {createRuntimeConfig} from '../../config/runtime';
-import {HttpClient, isHttpError} from '../../data/http';
+import {HttpClient, HttpError, isHttpError} from '../../data/http';
 import {appLogger} from '../../observability/logger';
-import {useNetworkStatus} from '../../platform/network/NetworkStatusProvider';
 import {authSessionRepository, runtimeSettingsRepository} from '../services';
 import type {StartupActions, StartupState} from './types';
 import type {AuthSession} from '../../features/auth/AuthSessionRepository';
+import {AuthClient} from '../../features/auth/AuthClient';
 
 interface StartupContextValue extends StartupActions {
   state: StartupState;
@@ -26,7 +26,6 @@ const logger = appLogger.child('startup');
 export function StartupProvider({
   children,
 }: React.PropsWithChildren): JSX.Element {
-  const network = useNetworkStatus();
   const [state, setState] = useState<StartupState>({phase: 'booting'});
   const runId = useRef(0);
   const sessionOverride = useRef<AuthSession | null>(null);
@@ -62,21 +61,20 @@ export function StartupProvider({
         return;
       }
 
-      if (network.status === 'offline') {
-        setState({phase: 'offline', settings, session});
-        return;
-      }
-
       const runtime = createRuntimeConfig(settings.serverAddress);
       const client = new HttpClient({
         baseUrl: runtime.apiBaseUrl,
         getAccessToken: () => session.accessToken,
         onUnauthorized: () => authSessionRepository.clear(),
       });
-      await client.request({
-        path: '/api/v1/auth/mobile/bootstrap',
-        timeoutMs: 12_000,
-      });
+      const authStatus = await new AuthClient(client).getStatus();
+      if (!authStatus.authenticated) {
+        throw new HttpError('Authentication is no longer valid', {
+          code: 'http_error',
+          status: 401,
+          retryable: false,
+        });
+      }
       if (currentRun !== runId.current) {
         return;
       }
@@ -123,7 +121,7 @@ export function StartupProvider({
           error instanceof Error ? error.message : 'Unable to start the app',
       });
     }
-  }, [network.status]);
+  }, []);
 
   useEffect(() => {
     evaluate().catch(error => logger.error('Startup evaluation failed', error));
@@ -137,6 +135,7 @@ export function StartupProvider({
       retry: evaluate,
       saveServer: async serverAddress => {
         const normalized = createRuntimeConfig(serverAddress).apiBaseUrl;
+        sessionOverride.current = null;
         await authSessionRepository.clear();
         await runtimeSettingsRepository.save({
           serverAddress: normalized,

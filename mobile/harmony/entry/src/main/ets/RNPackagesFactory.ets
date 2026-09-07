@@ -5,6 +5,10 @@ import { GestureHandlerPackage } from '@react-native-oh-tpl/react-native-gesture
 import { ReanimatedPackage } from '@react-native-oh-tpl/react-native-reanimated/ts';
 import { SafeAreaViewPackage } from '@react-native-oh-tpl/react-native-safe-area-context/ts';
 
+import { WebViewPackage } from '@react-native-oh-tpl/react-native-webview';
+
+import { SvgPackage } from '@react-native-oh-tpl/react-native-svg/ts';
+
 export function createRNPackages(ctx: RNPackageContext): RNPackage[] {
   return [
     new AsyncStoragePackage(ctx),
@@ -12,5 +16,7 @@ export function createRNPackages(ctx: RNPackageContext): RNPackage[] {
     new GestureHandlerPackage(ctx),
     new ReanimatedPackage(ctx),
     new SafeAreaViewPackage(ctx),
+    new WebViewPackage(ctx),
+    new SvgPackage(ctx),
   ];
 }

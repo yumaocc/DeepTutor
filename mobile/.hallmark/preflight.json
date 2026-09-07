@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-06",
+  "scope": "chat-screen",
+  "designSystem": "DESIGN.md",
+  "font": "platform system sans + platform mono",
+  "palette": "Learning Focus / cool fog / tonal cobalt",
+  "motion": "React Native Animated native driver; Reanimated already installed",
+  "spacing": "4dp tokens",
+  "framework": "React Native 0.77.1 + Paper + assistant-ui",
+  "preserve": [
+    "routes",
+    "ChatProvider",
+    "native Markdown",
+    "attachments"
+  ]
+}

@@ -2,6 +2,7 @@
  * @format
  */
 
+import './src/polyfills';
 import 'react-native-gesture-handler';
 import {Platform} from 'react-native';
 import {enableScreens} from 'react-native-screens';

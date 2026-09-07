@@ -1,9 +1,10 @@
 import React, {useState} from 'react';
-import {ActivityIndicator, Button, Text, TextInput} from 'react-native-paper';
+import {Button, Text, TextInput} from 'react-native-paper';
 import {StyleSheet, View} from 'react-native';
 
 import {SafeAreaScreen} from '../../components/layout/SafeAreaScreen';
 import {useStartup} from '../../app/startup/StartupProvider';
+import {ChatOrb} from '../../chat/ChatVisual';
 import {tokens} from '../../theme/tokens';
 
 function GateLayout({
@@ -28,9 +29,9 @@ function GateLayout({
 
 export function BootstrapScreen(): JSX.Element {
   return (
-    <GateLayout title="DeepTutor" body="正在准备移动端运行环境…">
-      <ActivityIndicator size="large" />
-    </GateLayout>
+    <View style={styles.bootstrap} accessible accessibilityLabel="DeepTutor">
+      <ChatOrb size={tokens.launch.orbSize} />
+    </View>
   );
 }
 
@@ -125,6 +126,12 @@ export function FatalScreen(): JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  bootstrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: tokens.color.canvas,
+  },
   screen: {backgroundColor: tokens.color.canvas},
   content: {
     flex: 1,

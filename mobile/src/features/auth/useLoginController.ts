@@ -7,6 +7,7 @@ import {appLogger} from '../../observability/logger';
 import {AuthClient} from './AuthClient';
 import {
   authSessionFromLogin,
+  authSessionFromStatus,
   isLoginCancellation,
   loginErrorMessage,
 } from './login';
@@ -61,13 +62,13 @@ export function useLoginController(serverAddress: string): LoginController {
       try {
         const status = await authClient.getStatus(controller.signal);
         if (!status.enabled) {
-          await finishLogin('', '', controller.signal);
+          await acceptSession(authSessionFromStatus(status, serverAddress));
           return;
         }
         const registration = await authClient.getRegistrationStatus(
           controller.signal,
         );
-        setRegistrationOpen(registration.registration_open);
+        setRegistrationOpen(registration.is_first_user);
       } catch (nextError) {
         if (!isLoginCancellation(nextError)) {
           logger.warn('Unable to inspect auth mode', nextError);
@@ -84,7 +85,7 @@ export function useLoginController(serverAddress: string): LoginController {
       logger.error('Auth mode check failed', nextError),
     );
     return () => controller.abort();
-  }, [authClient, checkVersion, finishLogin]);
+  }, [acceptSession, authClient, checkVersion, serverAddress]);
 
   const submit = useCallback(
     async (username: string, password: string) => {

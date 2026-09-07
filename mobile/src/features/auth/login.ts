@@ -1,24 +1,49 @@
 import {HttpError, isHttpError} from '../../data/http';
 import type {AuthSession} from './AuthSessionRepository';
-import type {MobileLoginResponse} from './contracts';
+import type {AuthStatus, LoginResponse} from './contracts';
 
 export function authSessionFromLogin(
-  response: MobileLoginResponse,
+  response: LoginResponse,
   serverAddress: string,
-  now = Date.now(),
 ): AuthSession {
   return {
-    authEnabled: response.auth_enabled,
-    accessToken: response.access_token,
+    authEnabled: true,
+    accessToken: null,
     refreshToken: null,
-    expiresAt:
-      response.expires_in > 0 ? now + response.expires_in * 1000 : null,
+    expiresAt: null,
     serverAddress,
     user: {
       id: response.user_id,
       username: response.username,
       role: response.role,
       isAdmin: response.is_admin,
+    },
+  };
+}
+
+export function authSessionFromStatus(
+  response: AuthStatus,
+  serverAddress: string,
+): AuthSession {
+  if (
+    !response.authenticated ||
+    !response.user_id ||
+    !response.username ||
+    !response.role
+  ) {
+    throw new Error('Authenticated server status is missing user identity');
+  }
+  return {
+    authEnabled: response.enabled,
+    accessToken: null,
+    refreshToken: null,
+    expiresAt: null,
+    serverAddress,
+    user: {
+      id: response.user_id,
+      username: response.username,
+      role: response.role,
+      isAdmin: response.is_admin ?? false,
     },
   };
 }
@@ -34,6 +59,8 @@ export function loginErrorMessage(error: unknown): string {
     return '';
   }
   switch (error.status) {
+    case 404:
+      return '服务器未提供兼容的登录接口，请检查服务器地址和部署版本。';
     case 401:
       return '账号或密码不正确。';
     case 403:

@@ -1,43 +1,65 @@
-import type {HttpClient} from '../../data/http';
+import {isHttpError, type HttpClient} from '../../data/http';
 import {
   authStatusSchema,
-  mobileLoginResponseSchema,
+  loginResponseSchema,
   registrationStatusSchema,
   type AuthStatus,
-  type MobileLoginResponse,
+  type LoginResponse,
   type RegistrationStatus,
 } from './contracts';
 
 export class AuthClient {
   constructor(private readonly http: HttpClient) {}
 
-  getStatus(signal?: AbortSignal): Promise<AuthStatus> {
-    return this.http.request({
-      path: '/api/v1/auth/status',
-      signal,
-      schema: authStatusSchema,
-    });
+  async getStatus(signal?: AbortSignal): Promise<AuthStatus> {
+    try {
+      const status = await this.http.request({
+        path: '/api/auth/status',
+        signal,
+        schema: authStatusSchema,
+        timeoutMs: 12_000,
+      });
+      this.http.setApiPrefix(this.http.apiPrefix ?? '/api');
+      return status;
+    } catch (error) {
+      if (!isHttpError(error) || error.status !== 404) {
+        throw error;
+      }
+      const prefix = this.http.apiPrefix === '/api/v1' ? '/api' : '/api/v1';
+      const status = await this.http.request({
+        apiPrefix: prefix,
+        path: '/api/auth/status',
+        signal,
+        schema: authStatusSchema,
+        timeoutMs: 12_000,
+      });
+      this.http.setApiPrefix(prefix);
+      return status;
+    }
   }
 
   getRegistrationStatus(signal?: AbortSignal): Promise<RegistrationStatus> {
     return this.http.request({
-      path: '/api/v1/auth/is_first_user',
+      path: '/api/auth/is_first_user',
       signal,
       schema: registrationStatusSchema,
     });
   }
 
-  login(
+  async login(
     username: string,
     password: string,
     signal?: AbortSignal,
-  ): Promise<MobileLoginResponse> {
+  ): Promise<LoginResponse> {
+    if (!this.http.apiPrefix) {
+      await this.getStatus(signal);
+    }
     return this.http.request({
-      path: '/api/v1/auth/mobile/login',
+      path: '/api/auth/login',
       method: 'POST',
       body: {username, password},
       signal,
-      schema: mobileLoginResponseSchema,
+      schema: loginResponseSchema,
     });
   }
 }

@@ -56,6 +56,7 @@ describe('WebSocketRuntime', () => {
       type: 'resume_from',
       turn_id: 'turn-1',
       seq: 4,
+      protocol_version: '2.0',
     });
     sockets[0].message({type: 'content', turn_id: 'turn-1', seq: 5});
     expect(events).toHaveLength(1);
@@ -63,6 +64,8 @@ describe('WebSocketRuntime', () => {
     expect(JSON.parse(sockets[0].sent.at(-1)!)).toEqual({
       type: 'cancel_turn',
       turn_id: 'turn-1',
+      command_id: expect.any(String),
+      protocol_version: '2.0',
     });
     runtime.close();
   });

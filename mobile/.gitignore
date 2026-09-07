@@ -66,3 +66,5 @@ yarn-error.log
 
 # testing
 /coverage
+
+/src/chat/rich/generated/

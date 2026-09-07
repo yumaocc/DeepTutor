@@ -3,6 +3,10 @@
 This document describes the shared runtime layer that every screen and feature
 must use. It is infrastructure, not evidence that a product flow is complete.
 
+Implementation and device-acceptance status is recorded in
+`IMPLEMENTATION_STATUS.md`; scope and priorities are recorded in
+`WEB_TO_MOBILE_FEATURE_MATRIX.md`.
+
 ## Provider order
 
 `AppProviders` owns process-wide providers in one place:
@@ -38,7 +42,7 @@ booting
 
 It loads versioned runtime settings, restores the secure auth session, rejects
 expired or server-mismatched credentials, observes network state and probes the
-mobile Bootstrap endpoint before entering the protected application.
+`/api/auth/status` endpoint (the aggregate mobile Bootstrap endpoint is still planned) before entering the protected application.
 
 ## Navigation and links
 
@@ -79,7 +83,8 @@ surface instead of a white screen.
 
 `WebSocketRuntime` provides an injected, testable transport layer with:
 
-- query-token authentication;
+- current native-network cookie authentication, plus optional query-token authentication;
+- v2 protocol envelopes and command IDs;
 - connection/recovery/offline/suspended states;
 - heartbeat and stale-connection detection;
 - capped exponential reconnect;
@@ -88,7 +93,7 @@ surface instead of a white screen.
 - terminal-event cleanup;
 - network and foreground/background lifecycle controls.
 
-Assistant UI will consume this runtime through the DeepTutor Chat Adapter; UI
+Assistant UI consumes this runtime through `ChatClient` and `ChatProvider`; UI
 components must not open sockets directly.
 
 ## Safe area and system UI
@@ -140,8 +145,8 @@ const runtime = createRuntimeConfig('https://learn.example.com');
 // runtime.wsBaseUrl === 'wss://learn.example.com'
 ```
 
-The selected server is future user state. Do not read a page-local environment
-variable or hardcode `localhost` inside API modules.
+The selected server is persisted user runtime state. Do not read a page-local
+environment variable or hardcode `localhost` inside API modules.
 
 ## HTTP requests
 
@@ -155,7 +160,7 @@ const client = new HttpClient({
 });
 
 const profile = await client.request({
-  path: '/api/v1/auth/profile',
+  path: '/api/auth/profile',
   signal,
   schema: profileSchema,
 });

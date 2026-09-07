@@ -17,6 +17,7 @@ export const paperTheme: MD3Theme = {
     onSurface: tokens.color.ink,
     onSurfaceVariant: tokens.color.body,
     outline: tokens.color.border,
+    outlineVariant: tokens.color.border,
     error: tokens.color.error,
     errorContainer: tokens.color.errorSoft,
     onErrorContainer: tokens.color.error,

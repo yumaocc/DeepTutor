@@ -1,0 +1,29 @@
+/* Hallmark · Learning Focus · portable export; native runtime uses src/theme/tokens.ts */
+:root {
+  --color-canvas: oklch(97.564% 0.00549 211.04);
+  --color-surface: oklch(98.984% 0.00251 228.78);
+  --color-surface-muted: oklch(94.514% 0.00698 219.56);
+  --color-ink: oklch(22.028% 0.01105 216.98);
+  --color-body: oklch(39.925% 0.01159 222.27);
+  --color-muted: oklch(48.004% 0.00936 216.69);
+  --color-border: oklch(83.991% 0.00975 222.08);
+  --color-primary: oklch(47.908% 0.13102 255.27);
+  --color-primary-pressed: oklch(42.072% 0.11893 254.61);
+  --color-primary-muted: oklch(94.975% 0.01542 257.20);
+  --color-on-primary: oklch(98.013% 0.00347 219.53);
+  --color-error: oklch(51.994% 0.19006 24.90);
+  --color-error-soft: oklch(95.383% 0.01852 13.38);
+  --font-display: system-ui, sans-serif;
+  --font-body: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --space-xxs: 4px; --space-xs: 8px; --space-sm: 12px;
+  --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-xxl: 48px;
+  --text-caption: 12px; --text-label: 14px; --text-body: 15px; --text-reading: 16px;
+  --text-title: 20px; --text-brand: 21px; --text-display: 28px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-full: 999px;
+  --rule-default: 1px; --rule-focus: 2px;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.7, 0, .84, 0);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-pulse: 520ms; --dur-stagger: 140ms;
+}

@@ -15,6 +15,14 @@ minimumReleaseAgeExclude:
   - assistant-cloud@0.1.42
   - assistant-stream@0.3.40
   - zod@4.5.4
+  - dompurify@3.4.15
+  - katex@0.18.7
 overrides:
-  '@react-native-community/cli': 11.3.6
-  '@react-native/codegen': 0.74.0
+  '@react-native-community/cli': 15.0.1
+  '@react-native/codegen': 0.77.1
+peerDependencyRules:
+  allowedVersions:
+    react-native-gesture-handler: 2.22.1
+    react-native-reanimated: 3.16.7
+allowBuilds:
+  esbuild: true

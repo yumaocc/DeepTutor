@@ -6,8 +6,13 @@
 - 移动端目标：Android、iOS、HarmonyOS NEXT
 - 核心原则：迁移普通用户的学习和创作能力，不迁移管理员控制台或后端服务配置
 - 代码策略：不迁移旧 Taro 代码，所有功能在 RN/RNOH 工程重新实现
+- 文档统一日期：2026-09-06
 
-状态标记：⬜ 未完成 · 🚫 不迁移。
+状态标记：✅ 已通过对应验收 · 🟡 部分代码已落地/待集成或真机验收 · ⬜ 未完成 · 🚫 不迁移。
+
+本文是功能范围和优先级的主记录；实现与验收状态以 `IMPLEMENTATION_STATUS.md` 为准。
+
+2026-09-06：Chat v2 Adapter、历史列表/分页/加载、停止、重新生成、用户回复和富内容预览已有代码。🟡 不代表整个条目完成：会话搜索尚未实现；Markdown/公式已原生内联排版（2026-09-06）；生成产物仅有消息内卡片，资料库入口待实现；真实模型与三端真机均待验收。
 
 本矩阵的旧完成/部分完成标记已经全部重置。Mock、脚手架、JS Bundle
 或 Android 测试 APK 不计为产品功能完成。
@@ -46,8 +51,8 @@
 
 | Web 路由               | Web 能力                               | 移动端结论                                                  | 优先级 | 当前状态 |
 | ---------------------- | -------------------------------------- | ----------------------------------------------------------- | ------ | -------- |
-| `/login`               | Cookie 登录、鉴权状态                  | 重做为服务器连接 + Bearer 登录                              | P0     | 🟡       |
-| `/register`            | 创建首个管理员                         | 合并到账号页；仅空白服务器开放，普通用户仍由 Web 管理员创建 | P0/Web | ⬜       |
+| `/login`               | Cookie 登录、鉴权状态                  | 已接服务器连接 + Cookie 登录；移动 Bearer 接口待实现                              | P0     | 🟡       |
+| `/register`            | 创建首个管理员                         | 合并到账号页；仅空白服务器开放，普通用户仍由 Web 管理员创建 | P0     | ⬜       |
 | `/home/[sessionId]`    | 完整 Chat Workspace                    | 重做为移动聊天主页面                                        | P0     | ⬜       |
 | `/space/chat-history`  | 会话列表、搜索和管理                   | 合并到聊天 Tab                                              | P0     | ⬜       |
 | `/knowledge`           | 知识库浏览、创建、文件和引擎配置       | 迁移用户浏览/上传/管理；引擎配置留 Web                      | P0/P1  | ⬜       |
@@ -83,15 +88,16 @@
 
 | 用户能力                | Web 依据/API                      | 移动端设计                                                               | 优先级 | 当前状态 |
 | ----------------------- | --------------------------------- | ------------------------------------------------------------------------ | ------ | -------- |
-| 配置 DeepTutor 服务地址 | Web 固定同源；移动端新增          | 首次启动或“我的”中配置 HTTPS 地址                                        | P0     | ⬜       |
-| 登录                    | `/api/v1/auth/login`              | `/api/v1/auth/mobile/login` 返回 Bearer Access Token                     | P0     | 🟡       |
-| Auth-disabled 本地模式  | `/api/v1/auth/status`             | 无密码进入 local-admin 空间                                              | P0     | 🟡       |
+| 配置 DeepTutor 服务地址 | Web 固定同源；移动端新增          | HTTP(S) 地址配置已有实现；“我的”管理入口与真机验收待完成                  | P0     | 🟡       |
+| 登录                    | `/api/auth/login`              | 当前接入 `/api/auth/login` Cookie；移动 Bearer 接口待实现                     | P0     | 🟡       |
+| Auth-disabled 本地模式  | `/api/auth/status`             | 无密码进入 local-admin 空间                                              | P0     | 🟡       |
 | 安全保存凭证            | Web HttpOnly Cookie               | 平台 SecureStorage Adapter：Android Keystore、iOS Keychain、Harmony HUKS | P0     | 🟡       |
+| 登录态恢复              | 移动端启动流程                    | 恢复凭据、清理过期/服务器不匹配状态和 Bootstrap 门控；真机待验收         | P0     | 🟡       |
 | Refresh Token           | Web Cookie 会话                   | 轮换、撤销、重放检测                                                     | P0     | ⬜       |
-| 获取用户有效能力        | Web 分散读取多个接口              | `/api/v1/auth/mobile/bootstrap` 聚合返回                                 | P0     | ⬜       |
-| 查看个人资料            | `/api/v1/auth/profile`            | “我的”资料页                                                             | P1     | ⬜       |
-| 修改头像                | `/api/v1/auth/profile`、`/avatar` | 图标头像、拍照/相册上传、删除                                            | P1     | ⬜       |
-| 退出登录                | `/api/v1/auth/logout`             | 清除安全存储、内存、缓存和 Socket                                        | P0     | ⬜       |
+| 获取用户有效能力        | Web 分散读取多个接口              | `/api/auth/mobile/bootstrap` 聚合返回                                 | P0     | ⬜       |
+| 查看个人资料            | `/api/auth/profile`            | “我的”资料页                                                             | P1     | ⬜       |
+| 修改头像                | `/api/auth/profile`、`/avatar` | 图标头像、拍照/相册上传、删除                                            | P1     | ⬜       |
+| 退出登录                | `/api/auth/logout`             | 清除安全存储、内存、缓存和 Socket                                        | P0     | ⬜       |
 | 首用户注册              | `/register`、`/is_first_user`     | 账号页检查服务器状态，创建首个管理员后立即登录                           | P0     | ⬜       |
 | 普通用户创建            | `/admin/users`                    | 不开放自助注册；管理员继续在 Web 创建账号                                | Web    | 🚫       |
 
@@ -99,24 +105,24 @@
 
 | 用户能力             | Web 依据/API                                  | 移动端设计                         | 优先级 | 当前状态 |
 | -------------------- | --------------------------------------------- | ---------------------------------- | ------ | -------- |
-| 新建聊天             | `/api/v1/ws` `start_turn`                     | 聊天首页直接输入                   | P0     | ⬜       |
-| 流式回复             | StreamEvent `content/result/done/error`       | 原生消息列表逐步更新               | P0     | ⬜       |
-| 连接状态             | WebSocket heartbeat/reconnect                 | 顶部连接状态和错误恢复             | P0     | ⬜       |
-| 弱网自动重连         | `resume_from`                                 | 指数退避重连                       | P0     | ⬜       |
-| 流事件补发与去重     | `turn_id + seq`                               | 按序续传并丢弃重复事件             | P0     | ⬜       |
-| 会话列表             | `GET /api/v1/sessions`                        | Chat Tab 的历史入口                | P0     | ⬜       |
-| 加载会话             | `GET /api/v1/sessions/{id}`                   | 恢复消息、事件、附件和偏好         | P0     | ⬜       |
-| 会话分页/搜索        | `limit/offset` + Web 本地筛选                 | 增量分页和已加载会话搜索           | P0     | ⬜       |
-| 重命名会话           | `PATCH /api/v1/sessions/{id}`                 | 管理菜单进入独立重命名页           | P1     | ⬜       |
-| 删除会话             | `DELETE /api/v1/sessions/{id}`                | 二次确认后删除                     | P0     | ⬜       |
-| 停止生成             | WS `cancel_turn`                              | 输入区切换为停止按钮               | P0     | ⬜       |
-| 重新生成             | WS `regenerate`                               | Assistant 消息更多菜单             | P0     | ⬜       |
-| 服务端拒绝恢复       | `regenerate_busy`、`nothing_to_regenerate`    | 恢复被临时移除的消息并提示         | P1     | ⬜       |
+| 新建聊天             | `/ws` `start_turn`                     | 聊天首页直接输入                   | P0     | 🟡       |
+| 流式回复             | StreamEvent `content/result/done/error`       | 原生消息列表逐步更新               | P0     | 🟡       |
+| 连接状态             | WebSocket heartbeat/reconnect                 | Runtime 已实现；Chat UI 与真实后端待接入 | P0 | 🟡       |
+| 弱网自动重连         | `resume_from`                                 | Runtime 已有指数退避；真实后端待验收 | P0   | 🟡       |
+| 流事件补发与去重     | `turn_id + seq`                               | 按序续传并丢弃重复事件             | P0     | 🟡       |
+| 会话列表             | `GET /api/sessions`                        | Chat Tab 的历史入口                | P0     | 🟡       |
+| 加载会话             | `GET /api/sessions/{id}`                   | 恢复消息、事件、附件和偏好         | P0     | 🟡       |
+| 会话分页/搜索        | `limit/offset` + Web 本地筛选                 | 增量分页和已加载会话搜索           | P0     | 🟡       |
+| 重命名会话           | `PATCH /api/sessions/{id}`                 | 管理菜单进入独立重命名页           | P1     | ⬜       |
+| 删除会话             | `DELETE /api/sessions/{id}`                | 不可恢复删除需确认；可恢复删除提供撤销 | P0   | ⬜       |
+| 停止生成             | WS `cancel_turn`                              | 输入区切换为停止按钮               | P0     | 🟡       |
+| 重新生成             | WS `regenerate`                               | Assistant 消息更多菜单             | P0     | 🟡       |
+| 服务端拒绝恢复       | `regenerate_busy`、`nothing_to_regenerate`    | 恢复被临时移除的消息并提示         | P1     | 🟡       |
 | 编辑用户消息         | `parent_message_id`                           | 编辑后创建新分支                   | P2     | ⬜       |
 | 分支切换             | `PUT /sessions/{id}/branch-selection`         | 消息旁的分支导航                   | P2     | ⬜       |
 | 删除一轮消息         | `DELETE /sessions/{id}/messages/{message_id}` | 消息更多菜单                       | P1     | ⬜       |
 | Turn 导航            | Web `TurnNavigator`                           | 长会话快速跳转                     | P2     | ⬜       |
-| `ask_user` 暂停/回复 | WS `submit_user_reply`                        | 原生单题/多题回复卡片              | P0     | ⬜       |
+| `ask_user` 暂停/回复 | WS `submit_user_reply`                        | 原生单题/多题回复卡片              | P0     | 🟡       |
 | 连接失败/超时        | Web watchdog 和 retry 状态                    | 可恢复错误、重试和服务器入口       | P0     | ⬜       |
 | 导出聊天             | Web Markdown 下载                             | 原生 Share Sheet 导出 Markdown/PDF | P1     | ⬜       |
 
@@ -134,7 +140,7 @@
 | 附件移除/预览     | `ChatComposer` pending attachment                         | 输入区附件横向列表                        | P0     | ⬜       |
 | Persona 选择      | `/api/v1/personas`                                        | Chat 上下文 Sheet                         | P1     | ⬜       |
 | Notebook 引用     | `/api/v1/notebook`                                        | 选择 Notebook 记录作为上下文              | P1     | ⬜       |
-| 历史会话引用      | `/api/v1/sessions`                                        | 选择其他会话作为上下文                    | P2     | ⬜       |
+| 历史会话引用      | `/api/sessions`                                        | 选择其他会话作为上下文                    | P2     | ⬜       |
 | 题库引用          | `/api/v1/question-notebook`                               | 选择题目作为上下文                        | P1     | ⬜       |
 | Memory 引用       | `/api/v1/memory`                                          | 选择 Summary/Profile 等用户记忆           | P2     | ⬜       |
 | Book 引用         | `/api/v1/book`                                            | 选择书籍页面作为上下文                    | P2     | ⬜       |
@@ -147,7 +153,7 @@
 | Capability    | Web 用户流程                         | 移动端范围                         | 优先级 | 当前状态 |
 | ------------- | ------------------------------------ | ---------------------------------- | ------ | -------- |
 | Chat          | 自由对话 + 可选工具                  | 完整迁移                           | P0     | ⬜       |
-| Deep Solve    | 多步推理、过程事件、最终答案         | 完整迁移，配置做底部 Sheet         | P0     | ⬜       |
+| Deep Solve    | 多步推理、过程事件、最终答案         | 完整迁移；高级配置进入选项页，短选择用 Sheet | P0 | ⬜       |
 | Deep Research | 主题重述、拆解、研究、报告           | 迁移配置、Outline 确认、进度和报告 | P1     | ⬜       |
 | Deep Question | 题型配置、生成、作答、判分、保存题库 | 完整学习闭环                       | P1     | ⬜       |
 | Visualize     | SVG、Chart、Mermaid、HTML、Manim     | 迁移配置和 Viewer；生成仍在后端    | P1     | ⬜       |
@@ -158,9 +164,9 @@
 
 | 用户能力             | Web 实现                             | 移动端设计                     | 优先级 | 当前状态 |
 | -------------------- | ------------------------------------ | ------------------------------ | ------ | -------- |
-| 普通文本             | React 消息组件                       | 原生 Text                      | P0     | ⬜       |
-| Markdown/GFM         | React Markdown                       | 局部 Rich Renderer             | P0     | ⬜       |
-| 数学公式             | KaTeX                                | 局部 WebView/Renderer          | P0     | ⬜       |
+| 普通文本             | React 消息组件                       | 原生 Text                      | P0     | 🟡       |
+| Markdown/GFM         | React Markdown                       | 原生 Markdown 组件             | P0     | 🟡       |
+| 数学公式             | KaTeX                                | MathJax + 原生 SVG          | P0     | 🟡       |
 | 代码块               | Syntax Highlighter、复制、换行和行号 | Renderer + 原生复制            | P0     | ⬜       |
 | Tool Call/Result     | Process/Trace Cards                  | 默认折叠，按需展开             | P1     | ⬜       |
 | Thinking/Observation | StreamEvent 卡片                     | 默认折叠，按需展开             | P1     | ⬜       |
@@ -169,8 +175,8 @@
 | 朗读回答             | `/api/v1/voice/tts`                  | 播放、暂停和自动朗读偏好       | P1     | ⬜       |
 | 保存到 Notebook      | `SaveToNotebookModal`                | 消息更多菜单                   | P1     | ⬜       |
 | 生成图片/视频        | 消息内媒体卡片                       | 图片查看、视频播放、保存和分享 | P1     | ⬜       |
-| SVG/Chart/Mermaid    | `VisualizationViewer`                | 全屏 Viewer                    | P1     | ⬜       |
-| HTML 交互结果        | 沙箱 iframe                          | 受限 WebView Viewer            | P1     | ⬜       |
+| SVG/Chart/Mermaid    | `VisualizationViewer`                | 全屏 Viewer                    | P1     | 🟡       |
+| HTML 交互结果        | 沙箱 iframe                          | 受限 WebView Viewer            | P1     | 🟡       |
 | Subagent Transcript  | Session Viewer/Transcript            | 高级详情页                     | P2     | ⬜       |
 | Cost/Context Summary | Session Trace                        | 简化为高级详情                 | P2     | ⬜       |
 
@@ -185,9 +191,9 @@
 | DOCX 预览          | `docx-preview`             | 首版后端文本预览，后续局部 WebView | P2     | ⬜       |
 | XLSX 预览          | `exceljs`                  | 首版下载/系统打开，后续表格 Viewer | P2     | ⬜       |
 | PPTX 预览          | 后端提取文本               | 文本预览或系统打开                 | P2     | ⬜       |
-| 生成产物列表       | Session Activity/Artifacts | 合并到资料库和会话详情             | P1     | ⬜       |
+| 生成产物列表       | Session Activity/Artifacts | 合并到资料库和会话详情             | P1     | 🟡       |
 | 下载/保存          | Browser Download           | 系统文件保存                       | P1     | ⬜       |
-| 分享               | Web 链接/下载              | 原生 Share Sheet                   | P1     | ⬜       |
+| 分享               | Web 链接/下载              | P0 基础分享；P1 扩展文件与产物分享 | P0/P1  | 🟡       |
 
 ## 9. 学习资料与个人内容
 
@@ -252,7 +258,7 @@
 | 类别            | Web 页面/API                                            | 原因                                                    |
 | --------------- | ------------------------------------------------------- | ------------------------------------------------------- |
 | 用户与权限      | `/admin/users`、multi-user Grant                        | 管理员职责                                              |
-| 部署初始化      | `/register` 首管理员注册                                | 只应在 Web/部署阶段执行                                 |
+| 部署与服务配置  | 部署参数、Provider 和系统初始化配置                      | 保留 Web；空白服务器首管理员注册是移动端明确允许的例外 |
 | 模型服务        | LLM、Models、Embedding、Image、Video、STT、TTS Provider | 包含密钥和部署配置                                      |
 | 搜索/解析       | Search、MinerU、Document Parsing                        | 后端服务配置和模型下载                                  |
 | 网络与状态      | Network、Status、端口、CORS、诊断                       | 部署运维能力                                            |
@@ -272,7 +278,7 @@
 
 必须完成：
 
-- 安全登录、Refresh Token、退出和服务器切换；
+- 安全登录、空白服务器首管理员注册、Refresh Token、退出和服务器切换；
 - 会话列表、加载、删除和分页；
 - Chat/Deep Solve、模型、工具和知识库选择；
 - 文本、Markdown、公式和代码块；

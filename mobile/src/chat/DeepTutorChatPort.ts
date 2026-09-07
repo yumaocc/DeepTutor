@@ -1,19 +1,13 @@
-export interface DeepTutorChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  streaming?: boolean;
-}
+import type {ChatSnapshot} from './ChatClient';
+export type {ChatMessage as DeepTutorChatMessage} from './protocol';
 
+/** DeepTutor owns wire events and persistence; Assistant UI subscribes to snapshots. */
 export interface DeepTutorChatPort {
-  readonly messages: readonly DeepTutorChatMessage[];
-  readonly running: boolean;
+  getSnapshot(): ChatSnapshot;
+  subscribe(listener: () => void): () => void;
   send(content: string): Promise<void>;
   cancel(): Promise<void>;
-  regenerate(messageId: string): Promise<void>;
-}
-
-/** Assistant UI adapts this port; DeepTutor keeps ownership of WS semantics. */
-export interface DeepTutorAssistantAdapter {
-  readonly chat: DeepTutorChatPort;
+  regenerate(): Promise<void>;
+  loadSession(sessionId: string): Promise<void>;
+  newSession(): void;
 }

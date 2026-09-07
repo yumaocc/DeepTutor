@@ -4,6 +4,8 @@
 #include "RNCNetInfoPackage.h"
 #include "ReanimatedPackage.h"
 #include "SafeAreaViewPackage.h"
+#include "WebViewPackage.h"
+#include "SVGPackage.h"
 
 using namespace rnoh;
 
@@ -15,5 +17,7 @@ std::vector<std::shared_ptr<Package>> PackageProvider::getPackages(
       std::make_shared<GestureHandlerPackage>(ctx),
       std::make_shared<ReanimatedPackage>(ctx),
       std::make_shared<SafeAreaViewPackage>(ctx),
+      std::make_shared<WebViewPackage>(ctx),
+      std::make_shared<SVGPackage>(ctx),
   };
 }

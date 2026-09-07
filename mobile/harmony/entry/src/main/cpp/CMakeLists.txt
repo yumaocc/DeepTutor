@@ -33,6 +33,10 @@ add_subdirectory(
   ./safe-area
 )
 
+add_subdirectory("${OH_MODULES}/@react-native-oh-tpl/react-native-webview/src/main/cpp" ./webview)
+
+add_subdirectory("${OH_MODULES}/@react-native-oh-tpl/react-native-svg/src/main/cpp" ./svg)
+
 add_library(rnoh_app SHARED
   "./PackageProvider.cpp"
   "${RNOH_CPP_DIR}/RNOHAppNapiBridge.cpp"
@@ -45,4 +49,6 @@ target_link_libraries(rnoh_app PUBLIC
   rnoh_gesture_handler
   rnoh_reanimated
   rnoh_safe_area
+  rnoh_svg
+  rnoh_webview
 )

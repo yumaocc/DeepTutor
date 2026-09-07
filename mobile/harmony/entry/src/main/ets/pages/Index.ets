@@ -9,10 +9,15 @@ import {
   RNOHErrorDialog,
   TraceJSBundleProviderDecorator,
 } from '@rnoh/react-native-openharmony';
+import { WebView } from '@react-native-oh-tpl/react-native-webview';
 import { createRNPackages } from '../RNPackagesFactory';
 
 @Builder
-export function buildCustomRNComponent(_ctx: ComponentBuilderContext) {}
+export function buildCustomRNComponent(ctx: ComponentBuilderContext) {
+  if (ctx.componentName === 'RNCWebView') {
+    WebView({ ctx: ctx.rnComponentContext, tag: ctx.tag });
+  }
+}
 
 const wrappedCustomRNComponentBuilder = wrapBuilder(buildCustomRNComponent);
 
@@ -47,7 +52,7 @@ struct Index {
             enableNDKTextMeasuring: true,
             enableBackgroundExecutor: false,
             enableCAPIArchitecture: true,
-            arkTsComponentNames: [],
+            arkTsComponentNames: ['RNCWebView'],
             fontResourceByFontFamily: {
               'Material Design Icons': $rawfile('fonts/MaterialCommunityIcons.ttf'),
             },

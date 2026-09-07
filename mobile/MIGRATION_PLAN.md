@@ -1,11 +1,16 @@
 # DeepTutor Web → React Native Mobile 执行计划
 
 - 重置日期：2026-08-31
-- 当前阶段：Phase 0 — 文档与架构重新基线
-- 执行状态：全部未完成
+- 文档统一日期：2026-09-06
+- 当前阶段：Phase 0–2 部分代码已落地，Phase 3–4 Chat 适配与预览代码已落地，真实后端和三端验收待完成
+- 执行状态：基础设施与登录已有实现，各阶段验收均未完成
 - 代码策略：不迁移旧 Taro 代码，按 Web 行为与后端协议重新实现
 
 本计划中的“迁移”指迁移用户能力和协议语义，不复制旧 Taro 页面、组件、样式、Store 或测试实现。旧工程只可作为需求参考，不能作为新实现的代码来源。
+
+## 状态口径
+
+本计划的 `[x]` 表示所述代码或工程检查已完成，不代表阶段或三端产品验收完成；`[ ]` 表示仍有工作待完成，可能已有部分代码。具体实现与验收状态以 `IMPLEMENTATION_STATUS.md` 为准，范围和优先级以 `WEB_TO_MOBILE_FEATURE_MATRIX.md` 为准。Phase 表示执行顺序，P0/P1/P2 表示产品优先级。
 
 ## Runtime P0 基础状态
 
@@ -25,8 +30,8 @@
 
 - [ ] 确认 RN/RNOH 版本矩阵和升级策略；
 - [ ] 确认正式应用名称、Android/iOS/Harmony 标识；
-- [ ] 将 RN 工程收敛为唯一正式 `mobile/`；
-- [ ] 配置正式目录、环境变量、日志、错误边界和 Feature Flag；
+- [ ] 核验旧 Taro 工程归档及全仓引用清理（RN 工程已位于 `mobile/`）；
+- [ ] 完善正式目录、运行时服务器配置和 Feature Flag；日志与错误边界已有基础实现；
 - [ ] 建立 Android、iOS、Harmony 的开发与测试构建命令；
 - [ ] 建立 CI 和构建产物真实性检查；
 - [ ] 三端真机完成最小启动、系统返回、安全区和键盘验证。
@@ -49,8 +54,8 @@
 
 - [ ] 运行时服务器地址配置和校验；
 - [ ] HTTP Transport、错误映射和请求取消；
-- [x] 移动登录、Auth-disabled 自动进入和安全错误映射；
-- [ ] 首用户注册；
+- [x] 当前 Cookie 登录、Auth-disabled 自动进入和安全错误映射；
+- [ ] 仅空白服务器开放首管理员注册并自动登录；普通用户仍由 Web 管理员创建；
 - [ ] Bootstrap 聚合数据加载；
 - [ ] Android Keystore、iOS Keychain、Harmony HUKS；
 - [ ] 启动恢复、Token 过期、退出和切换服务器；
@@ -60,18 +65,23 @@
 
 ## Phase 3 — P0 Chat 真实闭环
 
+代码进展（2026-09-06）：已挂载真实 ChatClient/Assistant UI External Store，接入 `/ws` v2、历史列表/分页/加载、停止、重新生成和用户回复。下列勾选仍按完整条目范围记录，所有真实后端验收仍待完成。
+
 - [ ] 定义 DeepTutor Adapter 与 Assistant UI Runtime 边界；
-- [ ] 接入 `/api/v1/ws` 鉴权和 StreamEvent；
+- [ ] 接入 `/ws` 鉴权和 StreamEvent；
 - [ ] 实现心跳、假活检测、重连、续传、取消和超时；
 - [ ] 实现消息聚合、去重、错误分类和终止语义；
 - [ ] 完成 Chat 空状态、消息流和 Composer；
 - [ ] 完成会话列表、分页、加载、重命名和删除；
 - [ ] 完成 Capability、模型、工具和知识库选择；
+- [ ] 完成 P0 Deep Solve 的移动配置、过程事件和最终结果；
 - [ ] 完成停止、重新生成、`ask_user` 和弱网恢复。
 
 验收：真实后端完成“登录 → 新建对话 → 流式回复 → 停止/恢复 → 历史续聊”，不依赖 Mock Adapter。
 
 ## Phase 4 — 富内容、附件与生成产物
+
+代码进展（2026-09-06）：已实现离线 ECharts/Chart.js JSON、HTML、SVG、Mermaid 和 Markdown/KaTeX 全屏 Viewer；已提取生成产物并保留历史载荷。附件选择/上传、完整二进制预览、原生 Markdown 仍未完成。
 
 - [ ] Markdown/GFM、公式、代码块和表格；
 - [ ] 代码复制、换行、语言标签和长行处理；
@@ -84,7 +94,7 @@
 
 ## Phase 5 — P1 学习闭环
 
-- [ ] Deep Solve、Deep Research、Quiz、Visualization；
+- [ ] Deep Research、Quiz、Visualization（Deep Solve 在 Phase 3 按 P0 交付）；
 - [ ] Mastery Path 和学习进度；
 - [ ] Knowledge 文件管理；
 - [ ] Notebook、题库和 Persona；

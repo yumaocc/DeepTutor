@@ -1,0 +1,4 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
+    <item><bitmap android:src="@drawable/launch_orb" android:gravity="center" /></item>
+</layer-list>

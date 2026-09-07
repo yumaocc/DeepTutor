@@ -1,7 +1,7 @@
 # DeepTutor 移动端架构决策
 
 - 状态：架构已选定，产品实现未完成
-- 更新日期：2026-08-31
+- 更新日期：2026-09-06
 - 目标平台：Android、iOS、HarmonyOS NEXT
 - 客户端策略：全新实现，不迁移旧 Taro 代码
 
@@ -25,7 +25,7 @@ React Native + TypeScript
 └── HarmonyOS NEXT：ArkUI 容器 + RNOH
 ```
 
-当前 PoC 使用 RN 0.72 兼容版本矩阵。正式开发前必须在三端真机验证并决定是否整体升级；原生依赖必须成组升级，不能单独追新。
+当前 PoC 使用 RN 0.77 + RNOH 0.77 兼容版本矩阵；原生依赖必须成组升级，不能单独追新。
 
 ## 3. 一套代码如何运行三端
 
@@ -92,7 +92,7 @@ OpenAPI 类型应从当前后端重新生成，不复制旧生成文件。
 
 ## 7. 富内容策略
 
-主界面保持原生。普通文本、基础 Markdown 和代码优先使用 RN 渲染；复杂 KaTeX、Mermaid、SVG、Chart.js、HTML 和办公文档使用有边界的受限 Viewer。
+主界面和对话正文使用原生组件。Markdown/GFM 使用 react-native-markdown-display，代码高亮使用 lowlight，公式使用 MathJax + react-native-svg；正文和展开的过程均由会话列表统一纵向滚动。Mermaid、交互图表及生成 HTML 点击后进入独立受限 Viewer，不在消息内部嵌 WebView。Markdown 附件预览同样使用原生 Markdown 组件。
 
 Viewer 必须具备：
 
@@ -141,13 +141,15 @@ mobile/
 
 ## 10. 功能范围
 
-P0：登录、服务器连接、Chat、会话历史、附件、Markdown/公式/代码、模型/工具/知识库选择、停止/重试/`ask_user` 和弱网恢复。
+功能范围和优先级以 `WEB_TO_MOBILE_FEATURE_MATRIX.md` 为主记录。
 
-P1：Deep Solve、Research、Quiz、Visualization、Mastery Path、Knowledge、Notebook、题库、Persona、TTS 和学习进度。
+P0：登录、空白服务器首管理员注册、服务器连接与切换、安全凭据与 Refresh Token、Chat/Deep Solve、会话历史、附件、Markdown/公式/代码、模型/工具/知识库选择、知识库浏览、停止/重新生成/`ask_user`、弱网恢复、复制、基础分享和生成产物访问。
+
+P1：Deep Research、Quiz、Visualization、Mastery Path、知识库文件管理、Notebook、题库、Persona 选择、TTS、学习进度和用户偏好。
 
 P2：Memory、Skills、Book、Co-writer、已连接 Agent 消费和大屏专项体验。
 
-管理员、Provider/API Key、Embedding、MCP、CLI Apps、网络诊断、部署配置和 Playground 保留在 Web。
+用户/角色/授权管理、Provider/API Key、Embedding、MCP、CLI Apps、网络诊断、部署配置和 Playground 保留在 Web。移动端仅允许空白服务器创建首个管理员；普通用户不开放自助注册，仍由 Web 管理员创建。
 
 ## 11. 必须通过的三端 PoC
 
@@ -168,7 +170,7 @@ P2：Memory、Skills、Book、Co-writer、已连接 Agent 消费和大屏专项�
 - 当前 Android 测试包使用调试证书，不能作为发布包；
 - Harmony 目前只有 JS Bundle 和 ArkUI 容器，尚未生成已签名 HAP；
 - Refresh Token、HUKS、附件和富内容 Viewer 仍未实现；
-- RN 0.72 是兼容性选择，生产前需要安全和维护周期评审。
+- RN/RNOH 0.77 是当前跨三端兼容性选择，生产前仍需安全和维护周期评审。
 
 ## 13. 决策结果
 

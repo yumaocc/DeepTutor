@@ -3,8 +3,48 @@
 
 # DeepTutor Mobile Design System
 
+## 当前全局规范 · 2026-09-07 · Lavender / Conversation Flow
+
+本节是所有移动端页面的有效设计规范，优先于下方历史规范。用户已确认将 Keitoto 的 [Conversation & Response Flow](https://dribbble.com/shots/26439303-AI-Chat-App-Conversation-Response-Flow) 作为公开视觉参考，并要求后续页面遵守同一套设计。原稿为透视展示图，没有可读取的 Figma 变量；以下是视觉提取后的原生适配值，不是声称从源文件获得的精确参数。背景采用用户随后确认的更淡版本。
+
+### Token 表
+
+| 类别 | Token / 数值 | 使用规则 |
+| --- | --- | --- |
+| 页面 | canvas `#F6F5FA` | 全局淡紫白底；系统手势区同色 |
+| 顶部氛围 | atmosphereTop `#E8E3FA` → atmosphereMiddle `#F0EDF9` → 透明 | 仅页面顶部，440 dp 内柔和消退；覆盖状态栏，内容不侵入安全区 |
+| 浮层 | surface `#FFFFFF`、surfaceMuted `#EEEEF3` | 输入、胶囊、用户气泡、弹层；阅读正文保持开放布局 |
+| 文字 | ink `#111118`、body `#464652`、muted `#6C6C7B` | 标题/主要动作、正文、辅助信息三级 |
+| 强调 | primary `#7563EE`、pressed `#493BA6`、muted `#EFEDFC` | 选择、链接与品牌图标；发送等主操作采用 ink 深色圆形按钮 |
+| 边界 | border `#DDDDE6` | 浮层细边使用原生 hairline，不画重描边 |
+| 错误 | error `#BE222A`、errorSoft `#FCEBEC` | 仅错误，不覆盖品牌角色 |
+| 间距 | 4 / 8 / 12 / 16 / 24 / 32 / 48 dp | 页面横边距 20；底部输入区横边距 16；组件间优先 8 / 12 / 16 |
+| 圆角 | 8 / 12 / 16 / 999 dp | 小附件 / 输入面板 / 外框和气泡 / 圆形及胶囊 |
+| 字号 | caption 12、label 14、body 15、reading 16、title 20 sp | 正文跟随系统字体；中文长文行高 26 |
+| 欢迎标题 | 24 / 33 sp，500 | 衬线角色：iOS Georgia、Android serif；系统中文回退；其他页面标题默认无衬线 |
+| 层级标题 | 23 / 20 / 18 sp | 阅读内容 H1 / H2 / H3；页面导航标题 17 |
+| 触控 | 最小 48 × 48 dp | 可见图形可更小，通过 hitSlop 扩展且不能覆盖邻近操作 |
+| 图标 | 常规 22、附件 18、提示 13、发送圆盘 32 dp | 使用现有 Paper 图标；不手绘替代成熟组件 |
+| 阴影 | 黑色，Y 2，blur 8，opacity 0.06；Android elevation 2 | 胶囊输入使用 opacity 0.04 / elevation 1，其余浮层按需；禁止厚重底影 |
+| 动效 | 只动 opacity / transform；等待 520 ms、错峰 140 ms | 遵守 reduced motion；不添加装饰循环或弹跳 |
+
+### 组件组合
+
+- 新对话：左侧圆形菜单入口（历史会话/帮助/重新生成），右侧圆形新建对话入口；居中球体与欢迎标题、紧凑胶囊建议、底部双层输入框。
+- 输入框（最新确认）：采用右侧参考图的单行胶囊，新对话与已有对话共用。白色表面、28 dp 圆角、4 dp 内边距，默认总高约 56 dp；左侧加号打开图片选择，中间文字输入，右侧 32 dp 深色发送/停止。保留 48 dp 操作区域。去掉外框提示、重复产品标识及独立附件行。多行文本和图片预览可增加高度，键盘出现时保持可见。阴影 opacity 0.04、Android elevation 1。
+- 回复：整个会话使用一个原生滚动列表，AI 正文不套可滚动卡片；用户气泡随内容收缩。Markdown、公式与附件保留原有真实渲染。
+- 历史会话：共享淡紫背景和安全区渐变，居中导航标题、左右圆形返回/新建按钮。原生 FlatList 渲染白色圆角会话行，当前会话使用浅紫底和文字标记；下拉刷新、触底分页，保留手动重试/加载更多。空、加载、失败状态使用同一字体与颜色体系，不显示虚构日期。
+- 其他页面：继承相同颜色、类型层级、圆角、触控与阴影；根据内容选择列表/表单/阅读布局，无须每页复制球体或欢迎结构。
+- 原图中订阅、语音、模型下拉不代表已有产品功能，不制造假入口；使用 DeepTutor 的真实内容和操作。
+
+### 实现与后续约束
+
+唯一基础值来源是 `src/theme/tokens.ts`，Paper 由 `src/theme/paperTheme.ts` 映射。`chatTheme.ts` 只允许聊天组件布局扩展，不再维护第二套颜色。后续新增或修改页面先读本节，引用 token；需要新值时先补全局角色与本表。历史页面本轮统一基础主题，结构按后续任务逐页迁移，不视为已全部还原。
+
+## 历史规范（归档参考，冲突时以上方当前规范为准）
+
 - 文档迁移日期：2026-08-31
-- 实现状态：未完成
+- 实现状态：设计规范已定义，组件实现与三端验收状态以 `IMPLEMENTATION_STATUS.md` 为准
 - 规则：本文件迁移设计意图，不继承旧 Taro 组件或页面实现
 
 Locked mobile design foundation. Future UI work in `mobile/` should read this
@@ -103,8 +143,8 @@ implementation values, not sources of truth for new UI.
 
 ### Dark mode specification
 
-Dark mode is defined now but must not be enabled until Android, iOS, Harmony,
-and Harmony are visually tested. Higher surfaces become lighter; hue roles do not
+Dark mode is defined now but must not be enabled until Android, iOS, and
+HarmonyOS NEXT are visually tested. Higher surfaces become lighter; hue roles do not
 change between modes.
 
 | Token                   | Value                       |
@@ -341,7 +381,9 @@ Foundation inventory:
 
 ### Local component library status
 
-All components below are planned and currently count as **not implemented**.
+The components below define the planned inventory. Implementation and acceptance
+status is maintained in `IMPLEMENTATION_STATUS.md`; this inventory does not
+claim that any component has passed device acceptance.
 The future library lives in `src/components/` and wraps Paper/Assistant UI behind
 DeepTutor semantic props instead of exposing vendor-specific choices to screens.
 
@@ -457,3 +499,169 @@ Do not copy Sass aliases or styles from the old Taro project.
 
 The `snow` and `glass` Web themes are not part of this mobile system. Mobile has
 one light system and one separately verified dark system; no glass variant.
+
+
+## Chat refinement · 2026-09-06
+
+User-selected direction: 安静精致. Preserve Learning Focus; adapt Long Document's
+continuous-reading rhythm to native conversation. Compact N9-style app bar,
+open assistant text, tonal compact user bubbles (85% maximum width), and one
+persistent composer. No entry animations, gradients, extra card layers, or
+message-level process/share buttons. History/new/overflow remain in ChatControls.
+
+The pending indicator uses three native-driver bars, opacity and scale only;
+stop on unmount/background and show static bars when Reduce Motion is enabled.
+Never fake progress percentages. The complete page keeps one vertical transcript.
+At tablet widths, the transcript and composer cap at 680dp. All action hit areas
+are 48dp; icon font assets are bundled locally, with no network font requests.
+
+## Exports
+
+Native runtime source: `src/theme/tokens.ts`. Portable OKLCH export: `tokens.css`.
+Platform system fonts are intentional for Chinese glyph coverage and font scaling.
+Web-only layouts and effects do not enter the native app.
+
+### Tailwind v4
+
+```css
+@import "./tokens.css";
+@theme inline {
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-ink);
+  --color-accent: var(--color-primary);
+  --font-sans: var(--font-body);
+  --spacing-page: 20px;
+}
+```
+
+### DTCG
+
+```json
+{
+  "color": {
+    "canvas": {
+      "$type": "color",
+      "$value": "oklch(97.564% 0.00549 211.04)"
+    },
+    "surface": {
+      "$type": "color",
+      "$value": "oklch(98.984% 0.00251 228.78)"
+    },
+    "surfaceMuted": {
+      "$type": "color",
+      "$value": "oklch(94.514% 0.00698 219.56)"
+    },
+    "ink": {
+      "$type": "color",
+      "$value": "oklch(22.028% 0.01105 216.98)"
+    },
+    "body": {
+      "$type": "color",
+      "$value": "oklch(39.925% 0.01159 222.27)"
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "oklch(48.004% 0.00936 216.69)"
+    },
+    "border": {
+      "$type": "color",
+      "$value": "oklch(83.991% 0.00975 222.08)"
+    },
+    "primary": {
+      "$type": "color",
+      "$value": "oklch(47.908% 0.13102 255.27)"
+    },
+    "primaryPressed": {
+      "$type": "color",
+      "$value": "oklch(42.072% 0.11893 254.61)"
+    },
+    "primaryMuted": {
+      "$type": "color",
+      "$value": "oklch(94.975% 0.01542 257.20)"
+    },
+    "onPrimary": {
+      "$type": "color",
+      "$value": "oklch(98.013% 0.00347 219.53)"
+    },
+    "error": {
+      "$type": "color",
+      "$value": "oklch(51.994% 0.19006 24.90)"
+    },
+    "errorSoft": {
+      "$type": "color",
+      "$value": "oklch(95.383% 0.01852 13.38)"
+    }
+  }
+}
+```
+
+### shadcn/ui
+
+```css
+:root {
+  --background: var(--color-canvas);
+  --foreground: var(--color-ink);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-on-primary);
+  --muted: var(--color-surface-muted);
+  --muted-foreground: var(--color-muted);
+  --border: var(--color-border);
+  --ring: var(--color-primary);
+  --radius: 12px;
+}
+```
+
+### Composer refinement - 2026-09-07
+
+User-requested exception to flat standard surfaces: the chat composer has no
+visible border and uses a subtle neutral native shadow (iOS opacity 0.08,
+radius 8dp, offset 2dp; Android elevation 3). Send and Stop use neutral ink icons
+on a transparent background, muted when disabled, with a light pressed surface.
+Keyboard focus on the action remains visible. Error feedback uses a soft error
+surface and the existing error notice. Other surfaces retain the flat policy.
+
+### Starter cards - 2026-09-07
+
+The two empty-chat suggestions are separate compact surface cards, using 16dp
+corners and a 12dp gap. Remove the shared divider; keep native Paper List.Item
+press feedback and the existing draft-only action. No added card shadows.
+
+
+## Chat variant · reference-led redesign · 2026-09-07
+
+User approved Keitoto's AI Chat App: Conversation & Response Flow as the primary visual reference:
+https://dribbble.com/shots/26439303-AI-Chat-App-Conversation-Response-Flow
+
+This is a native adaptation of its composition, not a reproduction of artwork. It overrides the earlier chat-specific layout and cobalt palette. Runtime source: src/theme/chatTheme.ts; scoped Paper provider keeps other routes unchanged.
+
+- Pale neutral canvas #F7F7FA, white surfaces, ink #202029, muted #6C6C7B, violet accent #6355CD. Colors are chosen for this implementation, not sampled source tokens.
+- Compact centered 17dp brand header. History stays at left; new conversation and regenerate live in the right menu. Connection status appears only when actionable.
+- Welcome is centered within the available transcript area: flat book mark, centered Chinese heading, supporting sentence, four compact two-column learning prompt cards. Cards only fill a draft.
+- Transcript remains one native vertical list. User bubbles are white and compact; assistant content stays open. Markdown heading scale is reduced to 23 / 20 / 18dp, body remains 16dp with 26dp leading.
+- Composer becomes a two-row surface: message and image drafts above, attachment control and neutral send/stop below. Keep the user-approved borderless surface and subtle native shadow.
+- No upgrade banners, reference orb artwork, camera/voice placeholders, process or share buttons. Native system fonts intentionally retain Chinese readability. Existing native waiting bars and reduced-motion support remain.
+- On small/keyboard-constrained viewports, welcome content can scroll; long messages, images and attachments continue using the existing data/rendering pipeline.
+
+
+## Chat visual override · 2026-09-07 · full reference composition
+
+The user explicitly rejected preserving the previous page and requested following the UI reference directly. This supersedes the earlier flat book mark, two-column cards, borderless composer, and colored-send restrictions for the chat surface.
+
+- Primary reference: Keitoto Conversation & Response Flow, full New Chat screen. Pale lavender light at the upper left; original native SVG sphere with layered highlights; two-line serif-role welcome; five compact colored-icon pills in 3+2 flow; circular navigation controls.
+- Empty-state composer: softly outlined outer frame, a short truthful attachment hint instead of a subscription claim, inner white input panel, clear action, product identity and paperclip, black circular send/stop control. During a conversation it becomes a compact single-row composer.
+- User bubbles and answer labels follow the reference's open composition; conversation begins with a smaller sphere. Waiting indicator is a three-dot white capsule with existing native-driver/reduced-motion behavior.
+- Native SVG is used for atmosphere and sphere (no WebView, remote assets or added dependencies). Chinese copy and actual DeepTutor actions remain; unavailable paid tiers, model switches and voice controls are not fabricated.
+
+Sphere asset update: the final orb is a locally bundled imagegen PNG at src/chat/assets/chat-orb.png, rendered with native Image; the initial SVG sphere was replaced after visual review. Background lighting remains native SVG.
+
+Background refinement: chat canvas is lavender-white #F6F5FA with a soft upper-left wash (#E8E3FA through #F0EDF9), fading over 440 dp. White controls remain distinct from the tinted page.
+
+Safe-area refinement: atmosphere sits behind the full chat safe area, including the transparent Android status bar; the Android gesture navigation bar matches #F6F5FA. Safe-area content insets remain in place.
+
+### Navigation and loading refinement
+
+Menu opens below its anchor without the extra Android status-bar offset. History uses the native modal fade transition (disabled with reduced motion). Selecting a session keeps history visible until the client finishes loading, with one row-level indicator. List requests retain a minimum 450 ms pending duration on success and failure; slower requests incur no extra delay. Refresh, initial, pagination and session-opening indicators are mutually exclusive.
+
+### App identity and launch
+
+Use the approved local chat orb for launcher icons and launch screens. Canvas #F6F5FA; center orb 96 dp. Cold-start reveal scales 0.92 to 1 over 600 ms, then fades the cover over 260 ms once startup resolves; minimum cover duration 850 ms. Reduced motion uses a static orb and 120 ms fade. Initialization continues beneath the cover; subsequent foreground resumes do not replay it. Native launch screens share the same orb and background. Export assets on macOS with `swift scripts/export-app-icons.swift "$PWD"` from mobile/.

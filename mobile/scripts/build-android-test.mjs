@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const androidDir = join(projectRoot, 'android');
-const buildToolsVersion = '33.0.0';
+const buildToolsVersion = '35.0.0';
 
 function firstExisting(candidates, childPath) {
   return candidates.find(
@@ -43,7 +43,7 @@ function detectAndroidSdk() {
       join(homedir(), 'Library', 'Android', 'sdk'),
       join(homedir(), 'Android', 'Sdk'),
     ],
-    join('platforms', 'android-33'),
+    join('platforms', 'android-35'),
   );
 }
 
@@ -60,7 +60,7 @@ if (!javaHome) {
 const androidSdk = detectAndroidSdk();
 if (!androidSdk) {
   fail(
-    'Android SDK API 33 not found. Install it with sdkmanager before building.',
+    'Android SDK API 35 not found. Install it with sdkmanager before building.',
   );
 }
 

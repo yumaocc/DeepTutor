@@ -3,7 +3,7 @@ import {describe, expect, it} from '@jest/globals';
 import {networkStatusFromState} from '../src/platform/network/networkState';
 
 describe('network status', () => {
-  it('does not report online when internet reachability is false', () => {
+  it('allows self-hosted servers when the public internet probe fails', () => {
     expect(
       networkStatusFromState({
         type: 'wifi',
@@ -11,7 +11,18 @@ describe('network status', () => {
         isInternetReachable: false,
         details: {isConnectionExpensive: false},
       }),
-    ).toMatchObject({status: 'offline', type: 'wifi'});
+    ).toMatchObject({status: 'online', type: 'wifi'});
+  });
+
+  it('reports offline when no network transport is connected', () => {
+    expect(
+      networkStatusFromState({
+        type: 'none',
+        isConnected: false,
+        isInternetReachable: false,
+        details: null,
+      }),
+    ).toMatchObject({status: 'offline', type: 'none'});
   });
 
   it('preserves unknown while native reachability is unresolved', () => {

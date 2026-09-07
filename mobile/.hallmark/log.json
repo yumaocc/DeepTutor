@@ -1,0 +1,63 @@
+[
+  {
+    "date": "2026-09-07",
+    "macrostructure": "Native history list",
+    "theme": "studied-DNA",
+    "enrichment": "none",
+    "brief": "Shared lavender palette, circular navigation, virtualized session list; four widths and stored session navigation verified."
+  },
+  {
+    "date": "2026-09-07",
+    "macrostructure": "Native conversation",
+    "theme": "studied-DNA",
+    "enrichment": "none",
+    "brief": "Lock reference-derived global lavender tokens; restore three-row welcome composer. Typecheck, lint, Android build, four widths, keyboard and native image picker verified."
+  },
+  {
+    "date": "2026-09-06",
+    "macrostructure": "Long Document (native conversation)",
+    "theme": "Learning Focus",
+    "nav": "N9 native app bar",
+    "footer": "persistent composer",
+    "enrichment": "none",
+    "brief": "安静精致的原生聊天页和等待动效",
+    "scope": "chat-screen",
+    "designSystem": "DESIGN.md"
+  },
+  {
+    "date": "2026-09-07",
+    "scope": "chat-screen",
+    "theme": "studied-DNA",
+    "source": "https://dribbble.com/shots/26439303-AI-Chat-App-Conversation-Response-Flow",
+    "structure": "centered welcome / two-column prompts / open transcript / two-row composer",
+    "validation": {
+      "tests": 48,
+      "widths": [
+        320,
+        375,
+        414,
+        768
+      ],
+      "android": "installed and visually verified",
+      "harmony": "JS bundle only"
+    }
+  },
+  {
+    "date": "2026-09-07",
+    "scope": "chat-screen",
+    "theme": "studied-DNA / full composition",
+    "source": "https://dribbble.com/shots/26439303-AI-Chat-App-Conversation-Response-Flow",
+    "structure": "circular navigation / luminous orb / serif welcome / 3+2 pills / framed empty composer / compact conversation composer",
+    "asset": "src/chat/assets/chat-orb.png (imagegen, original local asset)",
+    "validation": {
+      "android": "installed and visually verified",
+      "tests": 48,
+      "widths": [
+        320,
+        375,
+        414,
+        768
+      ]
+    }
+  }
+]
