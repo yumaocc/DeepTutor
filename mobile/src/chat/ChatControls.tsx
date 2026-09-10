@@ -1,3 +1,6 @@
+/* Hallmark · component: navigation drawer · genre: modern-minimal · theme: DeepTutor locked system
+ * critique: P5 H5 E4 S5 R5 V4 · contrast: pass · mobile: 320 / 375 / 414 / 768
+ */
 import React, {useEffect, useState} from 'react';
 import {
   AccessibilityInfo,
@@ -13,7 +16,7 @@ import {
   Button,
   IconButton,
   List,
-  Menu,
+  Surface,
   Text,
   TextInput,
 } from 'react-native-paper';
@@ -24,6 +27,7 @@ import {SafeAreaScreen} from '../components/layout/SafeAreaScreen';
 import {useChat} from './ChatProvider';
 import {useAui} from '@assistant-ui/react-native';
 import {record} from './protocol';
+import type {LlmOption} from './ChatClient';
 import {useInfiniteQuery} from '@tanstack/react-query';
 const HistoryIcon = () => (
   <List.Icon icon="message-outline" color={tokens.color.primary} />
@@ -38,13 +42,63 @@ const HistoryLoading = () => (
     style={{marginHorizontal: tokens.space.md}}
   />
 );
-export function ChatControls({title}: {title: React.ReactNode}) {
+const SelectedModelIcon = () => (
+  <List.Icon icon="check-circle" color={tokens.color.primary} />
+);
+const UnselectedModelIcon = () => (
+  <List.Icon icon="circle-outline" color={tokens.color.muted} />
+);
+function HeaderAction({
+  icon,
+  label,
+  disabled,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Surface
+      mode="elevated"
+      elevation={tokens.chat.surfaceElevation}
+      style={styles.iconSurface}>
+      <IconButton
+        icon={icon}
+        accessibilityLabel={label}
+        disabled={disabled}
+        size={tokens.chat.icon}
+        style={styles.iconButton}
+        hitSlop={tokens.space.xxs}
+        onPress={onPress}
+      />
+    </Surface>
+  );
+}
+interface ChatControlsProps {
+  title: React.ReactNode;
+  onOpenDrawer: () => void;
+  historyOpen: boolean;
+  onHistoryOpenChange: (open: boolean) => void;
+  modelsOpen: boolean;
+  onModelsOpenChange: (open: boolean) => void;
+}
+
+export function ChatControls({
+  title,
+  onOpenDrawer,
+  historyOpen,
+  onHistoryOpenChange,
+  modelsOpen,
+  onModelsOpenChange,
+}: ChatControlsProps) {
   const aui = useAui();
   const {client, snapshot, server, identity} = useChat();
-  const [history, setHistory] = useState(false);
-  const [menu, setMenu] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(true);
   const [opening, setOpening] = useState<string | null>(null);
+  const [models, setModels] = useState<LlmOption[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
   useEffect(() => {
     let alive = true;
     AccessibilityInfo.isReduceMotionEnabled()
@@ -67,13 +121,31 @@ export function ChatControls({title}: {title: React.ReactNode}) {
     if (opening && !snapshot.loading) {
       if (snapshot.sessionId === opening && !snapshot.error) {
         aui.composer.reset();
-        setHistory(false);
+        onHistoryOpenChange(false);
       } else if (snapshot.error) {
         Alert.alert('无法打开对话', snapshot.error);
       }
       setOpening(null);
     }
-  }, [opening, snapshot.loading, snapshot.sessionId, snapshot.error, aui]);
+  }, [
+    opening,
+    snapshot.loading,
+    snapshot.sessionId,
+    snapshot.error,
+    aui,
+    onHistoryOpenChange,
+  ]);
+  useEffect(() => {
+    if (!modelsOpen) {
+      return;
+    }
+    setModelsLoading(true);
+    client
+      .listLlmOptions()
+      .then(setModels)
+      .catch(() => Alert.alert('无法加载模型', '请稍后再试。'))
+      .finally(() => setModelsLoading(false));
+  }, [client, modelsOpen]);
   const query = useInfiniteQuery({
     queryKey: ['mobile-chat-sessions', server, identity],
     initialPageParam: 0,
@@ -86,66 +158,21 @@ export function ChatControls({title}: {title: React.ReactNode}) {
       lastPage.length === 30
         ? pages.reduce((count, page) => count + page.length, 0)
         : undefined,
-    enabled: history,
+    enabled: historyOpen,
   });
   const sessions = query.data?.pages.flat() ?? [];
   return (
     <View>
       <View style={styles.actions}>
-        <Menu
-          anchorPosition="bottom"
-          statusBarHeight={0}
-          visible={menu}
-          onDismiss={() => setMenu(false)}
-          anchor={
-            <IconButton
-              icon="menu"
-              accessibilityLabel="导航菜单"
-              size={tokens.chat.icon}
-              style={styles.iconButton}
-              hitSlop={4}
-              onPress={() => setMenu(true)}
-            />
-          }>
-          <Menu.Item
-            leadingIcon="help-circle-outline"
-            title={'\u4f7f\u7528\u5e2e\u52a9'}
-            onPress={() => {
-              setMenu(false);
-              Alert.alert(
-                'DeepTutor',
-                '\u70b9\u51fb\u5feb\u6377\u5165\u53e3\u586b\u5165\u95ee\u9898\uff0c\u6216\u76f4\u63a5\u8f93\u5165\u6587\u5b57\u3002\u56de\u5f62\u9488\u53ef\u6dfb\u52a0\u56fe\u7247\uff0c\u53d1\u9001\u540e\u53ef\u968f\u65f6\u505c\u6b62\u751f\u6210\u3002\u5de6\u4e0a\u89d2\u53ef\u67e5\u770b\u5386\u53f2\u5bf9\u8bdd\u3002',
-              );
-            }}
-          />
-          <Menu.Item
-            leadingIcon="history"
-            title="历史会话"
-            disabled={snapshot.running || snapshot.loading}
-            onPress={() => {
-              setMenu(false);
-              setHistory(true);
-            }}
-          />
-          <Menu.Item
-            leadingIcon="refresh"
-            title="重新生成"
-            disabled={
-              snapshot.running || snapshot.loading || !snapshot.sessionId
-            }
-            onPress={() => {
-              setMenu(false);
-              client.regenerate().catch(() => undefined);
-            }}
-          />
-        </Menu>
+        <HeaderAction
+          icon="menu"
+          label="导航菜单"
+          onPress={onOpenDrawer}
+        />
         {title}
-        <IconButton
+        <HeaderAction
           icon="square-edit-outline"
-          accessibilityLabel="新建对话"
-          size={tokens.chat.icon}
-          style={styles.iconButton}
-          hitSlop={4}
+          label="新建对话"
           disabled={snapshot.running || snapshot.loading}
           onPress={() => {
             aui.composer.reset();
@@ -165,10 +192,10 @@ export function ChatControls({title}: {title: React.ReactNode}) {
         </View>
       ) : null}
       <Modal
-        visible={history}
+        visible={modelsOpen}
         statusBarTranslucent
         animationType={reducedMotion ? 'none' : 'fade'}
-        onRequestClose={() => setHistory(false)}>
+        onRequestClose={() => onModelsOpenChange(false)}>
         <View style={styles.historyScreen}>
           <ChatAtmosphere />
           <SafeAreaScreen>
@@ -178,23 +205,90 @@ export function ChatControls({title}: {title: React.ReactNode}) {
               barStyle="dark-content"
             />
             <View style={styles.actions}>
-              <IconButton
+              <HeaderAction
                 icon="chevron-left"
-                accessibilityLabel="返回聊天"
-                style={styles.iconButton}
-                hitSlop={4}
-                onPress={() => setHistory(false)}
+                label="返回聊天"
+                onPress={() => onModelsOpenChange(false)}
+              />
+              <Text accessibilityRole="header" style={styles.historyTitle}>
+                对话模型
+              </Text>
+              <View style={styles.headerSpacer} />
+            </View>
+            {modelsLoading ? (
+              <View style={styles.modelLoading}>
+                <ActivityIndicator color={tokens.color.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={models}
+                keyExtractor={item => `${item.profile_id}:${item.model_id}`}
+                contentContainerStyle={styles.historyContent}
+                renderItem={({item}) => {
+                  const selected =
+                    snapshot.llmSelection?.profile_id === item.profile_id &&
+                    snapshot.llmSelection?.model_id === item.model_id;
+                  return (
+                    <List.Item
+                      title={item.model_name}
+                      description={`${item.provider_label || item.profile_name} · ${item.profile_name}`}
+                      left={
+                        selected ? SelectedModelIcon : UnselectedModelIcon
+                      }
+                      style={[
+                        styles.sessionRow,
+                        selected && styles.currentSession,
+                      ]}
+                      onPress={() => {
+                        client.selectLlm({
+                          profile_id: item.profile_id,
+                          model_id: item.model_id,
+                        });
+                        onModelsOpenChange(false);
+                      }}
+                    />
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyTitle}>没有可用模型</Text>
+                    <Text style={styles.emptyHint}>
+                      请联系管理员为你的账号分配模型。
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </SafeAreaScreen>
+        </View>
+      </Modal>
+      <Modal
+        visible={historyOpen}
+        statusBarTranslucent
+        animationType={reducedMotion ? 'none' : 'fade'}
+        onRequestClose={() => onHistoryOpenChange(false)}>
+        <View style={styles.historyScreen}>
+          <ChatAtmosphere />
+          <SafeAreaScreen>
+            <StatusBar
+              translucent
+              backgroundColor="transparent"
+              barStyle="dark-content"
+            />
+            <View style={styles.actions}>
+              <HeaderAction
+                icon="chevron-left"
+                label="返回聊天"
+                onPress={() => onHistoryOpenChange(false)}
               />
               <Text accessibilityRole="header" style={styles.historyTitle}>
                 历史会话
               </Text>
-              <IconButton
+              <HeaderAction
                 icon="plus"
-                accessibilityLabel="新建对话"
-                style={styles.iconButton}
-                hitSlop={4}
+                label="新建对话"
                 onPress={() => {
-                  setHistory(false);
+                  onHistoryOpenChange(false);
                   aui.composer.reset();
                   client.newSession();
                 }}
@@ -286,7 +380,7 @@ export function ChatControls({title}: {title: React.ReactNode}) {
                           if (query.isError) {
                             query.refetch().catch(() => undefined);
                           } else {
-                            setHistory(false);
+                            onHistoryOpenChange(false);
                           }
                         }}>
                         {query.isError ? '重新加载' : '开始提问'}
@@ -426,17 +520,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: tokens.chat.headerHeight,
-    paddingHorizontal: tokens.space.xs,
+    paddingHorizontal: tokens.space.md,
     gap: tokens.space.xxs,
   },
-  iconButton: {
-    margin: 4,
-    width: 40,
-    height: 40,
+  iconSurface: {
+    width: tokens.chat.headerAction,
+    height: tokens.chat.headerAction,
+    borderRadius: tokens.radius.full,
     backgroundColor: tokens.color.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: tokens.color.border,
+    shadowColor: tokens.color.shadowSoft,
+    shadowOffset: {width: 0, height: tokens.chat.surfaceShadowOffset},
+    shadowOpacity: tokens.chat.surfaceShadowOpacity,
+    shadowRadius: tokens.chat.surfaceShadowRadius,
+    elevation: tokens.chat.surfaceElevation,
   },
+  iconButton: {
+    margin: 0,
+    width: tokens.chat.headerAction,
+    height: tokens.chat.headerAction,
+  },
+  headerSpacer: {width: 48, height: 48},
+  modelLoading: {flex: 1, alignItems: 'center', justifyContent: 'center'},
   notice: {padding: tokens.space.md, backgroundColor: tokens.color.errorSoft},
   historyScreen: {flex: 1, backgroundColor: tokens.color.canvas},
   historyTitle: {

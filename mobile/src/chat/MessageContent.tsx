@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Image, Linking, StyleSheet, View} from 'react-native';
-import {Button, Text, TouchableRipple} from 'react-native-paper';
+import {Button, List, Text, TouchableRipple} from 'react-native-paper';
 import {useChat} from './ChatProvider';
 import {record, type ChatAttachment, type ChatMessage} from './protocol';
 import {richContents, safeUrl, type RichContent} from './rich/content';
@@ -10,6 +10,18 @@ import {chatTokens as tokens} from '../theme/chatTheme';
 import {ImagePreview} from './ImagePreview';
 import {imageUri} from './imageAttachments';
 import {ThinkingIndicator} from './ThinkingIndicator';
+
+type FileListIconProps = Omit<React.ComponentProps<typeof List.Icon>, 'icon'>;
+const FileLeadingIcon = (props: FileListIconProps) => (
+  <List.Icon
+    {...props}
+    icon="file-document-outline"
+    color={tokens.color.primary}
+  />
+);
+const FileTrailingIcon = (props: FileListIconProps) => (
+  <List.Icon {...props} icon="chevron-right" />
+);
 
 function Attachment({
   attachment,
@@ -75,7 +87,6 @@ function Attachment({
   };
   return (
     <View style={styles.artifact}>
-      <Text numberOfLines={1}>{title}</Text>
       {image && photo ? (
         <TouchableRipple
           onPress={() => setImageOpen(true)}
@@ -97,14 +108,20 @@ function Attachment({
         />
       ) : null}
       {!image ? (
-        <Button
-          loading={loading}
+        <List.Item
+          title={title}
+          description={kind ? '预览附件' : '打开附件'}
+          titleNumberOfLines={1}
+          titleStyle={styles.fileTitle}
+          descriptionStyle={styles.fileDescription}
+          style={styles.fileRow}
+          left={FileLeadingIcon}
+          right={FileTrailingIcon}
           disabled={loading}
           onPress={() => {
             open().catch(() => undefined);
-          }}>
-          {kind ? '预览附件' : '打开附件'}
-        </Button>
+          }}
+        />
       ) : null}
       {error ? <Text>{error}</Text> : null}
     </View>
@@ -221,6 +238,17 @@ const styles = StyleSheet.create({
     fontSize: tokens.type.reading,
     lineHeight: 25,
   },
-  artifact: {marginTop: tokens.space.sm},
+  artifact: {marginTop: tokens.space.xs},
+  fileRow: {
+    minWidth: 220,
+    paddingVertical: 0,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.primaryMuted,
+  },
+  fileTitle: {fontSize: tokens.type.label, color: tokens.color.ink},
+  fileDescription: {
+    fontSize: tokens.type.caption,
+    color: tokens.color.muted,
+  },
   image: {width: '100%', height: 180, borderRadius: tokens.radius.sm},
 });

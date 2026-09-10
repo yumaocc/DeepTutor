@@ -26,7 +26,9 @@ interface LoginController {
 const logger = appLogger.child('login');
 
 export function useLoginController(serverAddress: string): LoginController {
-  const {acceptSession} = useStartup();
+  const {acceptSession, state} = useStartup();
+  const guestAccessToken =
+    state.phase === 'needs_auth' ? state.guestSession?.accessToken : null;
   const [checkingServer, setCheckingServer] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -39,8 +41,13 @@ export function useLoginController(serverAddress: string): LoginController {
 
   const authClient = useMemo(() => {
     const runtime = createRuntimeConfig(serverAddress);
-    return new AuthClient(new HttpClient({baseUrl: runtime.apiBaseUrl}));
-  }, [serverAddress]);
+    return new AuthClient(
+      new HttpClient({
+        baseUrl: runtime.apiBaseUrl,
+        getAccessToken: () => guestAccessToken,
+      }),
+    );
+  }, [guestAccessToken, serverAddress]);
 
   const finishLogin = useCallback(
     async (username: string, password: string, signal?: AbortSignal) => {

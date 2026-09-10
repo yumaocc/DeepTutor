@@ -20,7 +20,7 @@ import {useLoginController} from '../../features/auth/useLoginController';
 import {tokens} from '../../theme/tokens';
 
 export function LoginScreen(): JSX.Element {
-  const {changeServer, state} = useStartup();
+  const {changeServer, continueAsGuest, state} = useStartup();
   if (state.phase !== 'needs_auth') {
     return (
       <SafeAreaScreen style={styles.screen}>
@@ -33,6 +33,9 @@ export function LoginScreen(): JSX.Element {
   return (
     <LoginForm
       changeServer={changeServer}
+      continueAsGuest={
+        state.canContinueAsGuest ? continueAsGuest : undefined
+      }
       server={state.settings.serverAddress}
     />
   );
@@ -41,9 +44,11 @@ export function LoginScreen(): JSX.Element {
 function LoginForm({
   server,
   changeServer,
+  continueAsGuest,
 }: {
   server: string;
   changeServer(): Promise<void>;
+  continueAsGuest?(): Promise<void>;
 }): JSX.Element {
   const controller = useLoginController(server);
   const passwordRef = useRef<NativeTextInput | null>(null);
@@ -224,6 +229,14 @@ function LoginForm({
               onPress={submit}>
               {controller.submitting ? '正在登录…' : '登录'}
             </Button>
+            {continueAsGuest ? (
+              <Button
+                disabled={controller.submitting}
+                mode="text"
+                onPress={continueAsGuest}>
+                继续免费试用
+              </Button>
+            ) : null}
           </Surface>
 
           <Text variant="bodySmall" style={styles.footer}>

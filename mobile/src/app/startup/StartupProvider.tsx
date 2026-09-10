@@ -9,12 +9,19 @@ import React, {
 } from 'react';
 
 import {createRuntimeConfig} from '../../config/runtime';
+import type {RuntimeSettings} from '../../config/RuntimeSettingsRepository';
 import {HttpClient, HttpError, isHttpError} from '../../data/http';
 import {appLogger} from '../../observability/logger';
 import {authSessionRepository, runtimeSettingsRepository} from '../services';
 import type {StartupActions, StartupState} from './types';
 import type {AuthSession} from '../../features/auth/AuthSessionRepository';
 import {AuthClient} from '../../features/auth/AuthClient';
+import {
+  authSessionFromGuest,
+  authSessionFromStatus,
+} from '../../features/auth/login';
+import {getOrCreateInstallationId} from '../../features/auth/installation';
+import {appStorage} from '../../platform/storage/asyncStorage';
 
 interface StartupContextValue extends StartupActions {
   state: StartupState;
@@ -22,6 +29,32 @@ interface StartupContextValue extends StartupActions {
 
 const StartupContext = createContext<StartupContextValue | null>(null);
 const logger = appLogger.child('startup');
+
+async function provisionIdentity(
+  settings: RuntimeSettings,
+): Promise<AuthSession | null> {
+  const runtime = createRuntimeConfig(settings.serverAddress);
+  const authClient = new AuthClient(new HttpClient({baseUrl: runtime.apiBaseUrl}));
+  const status = await authClient.getStatus();
+  if (status.authenticated) {
+    return authSessionFromStatus(status, settings.serverAddress);
+  }
+  if (!status.guest_trial_available) {
+    return null;
+  }
+  const installationId = await getOrCreateInstallationId(appStorage);
+  try {
+    const guest = await authClient.createGuestSession(installationId);
+    return authSessionFromGuest(guest, settings.serverAddress);
+  } catch (error) {
+    // A disabled, exhausted, expired, or temporarily misconfigured trial must
+    // still leave the normal account login available.
+    if (isHttpError(error) && (error.status ?? 0) >= 400) {
+      return null;
+    }
+    throw error;
+  }
+}
 
 export function StartupProvider({
   children,
@@ -32,6 +65,7 @@ export function StartupProvider({
 
   const evaluate = useCallback(async () => {
     const currentRun = ++runId.current;
+    let attemptedSession: AuthSession | null = null;
     setState({phase: 'booting'});
     try {
       const settings = await runtimeSettingsRepository.load();
@@ -45,6 +79,7 @@ export function StartupProvider({
 
       const session =
         sessionOverride.current ?? (await authSessionRepository.load());
+      attemptedSession = session;
       if (currentRun !== runId.current) {
         return;
       }
@@ -57,7 +92,18 @@ export function StartupProvider({
           sessionOverride.current = null;
           await authSessionRepository.clear();
         }
-        setState({phase: 'needs_auth', settings});
+        setState({phase: 'provisioning_guest'});
+        const provisioned = await provisionIdentity(settings);
+        if (currentRun !== runId.current) {
+          return;
+        }
+        if (!provisioned) {
+          setState({phase: 'needs_auth', settings});
+          return;
+        }
+        sessionOverride.current = provisioned;
+        await authSessionRepository.save(provisioned);
+        setState({phase: 'ready', settings, session: provisioned});
         return;
       }
 
@@ -78,7 +124,14 @@ export function StartupProvider({
       if (currentRun !== runId.current) {
         return;
       }
-      setState({phase: 'ready', settings, session});
+      const refreshedSession: AuthSession = {
+        ...session,
+        subjectType: authStatus.subject_type ?? session.subjectType,
+        trial: authStatus.trial ?? null,
+      };
+      sessionOverride.current = refreshedSession;
+      await authSessionRepository.save(refreshedSession);
+      setState({phase: 'ready', settings, session: refreshedSession});
     } catch (error) {
       if (currentRun !== runId.current) {
         return;
@@ -87,9 +140,41 @@ export function StartupProvider({
         const settings = await runtimeSettingsRepository.load();
         sessionOverride.current = null;
         await authSessionRepository.clear();
-        setState(
-          settings ? {phase: 'needs_auth', settings} : {phase: 'needs_server'},
-        );
+        if (!settings) {
+          setState({phase: 'needs_server'});
+          return;
+        }
+        if (attemptedSession?.subjectType === 'guest') {
+          setState({
+            phase: 'needs_auth',
+            settings,
+            guestSession: attemptedSession,
+          });
+          return;
+        }
+        setState({phase: 'provisioning_guest'});
+        try {
+          const provisioned = await provisionIdentity(settings);
+          if (currentRun !== runId.current) {
+            return;
+          }
+          if (!provisioned) {
+            setState({phase: 'needs_auth', settings});
+            return;
+          }
+          sessionOverride.current = provisioned;
+          await authSessionRepository.save(provisioned);
+          setState({phase: 'ready', settings, session: provisioned});
+        } catch (provisionError) {
+          logger.error('Guest provisioning failed', provisionError);
+          setState({
+            phase: 'fatal',
+            message:
+              provisionError instanceof Error
+                ? provisionError.message
+                : 'Unable to start the guest trial',
+          });
+        }
         return;
       }
       if (isHttpError(error) && error.status === 426) {
@@ -169,6 +254,20 @@ export function StartupProvider({
         await authSessionRepository.clear();
         await evaluate();
       },
+      showLogin: () => {
+        setState(current => {
+          if (current.phase === 'ready' || current.phase === 'offline') {
+            return {
+              phase: 'needs_auth',
+              settings: current.settings,
+              canContinueAsGuest: true,
+              guestSession: current.session,
+            };
+          }
+          return current;
+        });
+      },
+      continueAsGuest: evaluate,
     }),
     [evaluate],
   );

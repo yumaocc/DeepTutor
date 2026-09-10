@@ -1,9 +1,11 @@
 import {isHttpError, type HttpClient} from '../../data/http';
 import {
   authStatusSchema,
+  guestSessionResponseSchema,
   loginResponseSchema,
   registrationStatusSchema,
   type AuthStatus,
+  type GuestSessionResponse,
   type LoginResponse,
   type RegistrationStatus,
 } from './contracts';
@@ -43,6 +45,25 @@ export class AuthClient {
       path: '/api/auth/is_first_user',
       signal,
       schema: registrationStatusSchema,
+    });
+  }
+
+  async createGuestSession(
+    installationId: string,
+    signal?: AbortSignal,
+  ): Promise<GuestSessionResponse> {
+    if (!this.http.apiPrefix) {
+      await this.getStatus(signal);
+    }
+    return this.http.request({
+      path: '/api/auth/guest-session',
+      method: 'POST',
+      body: {
+        client_type: 'mobile',
+        installation_id: installationId,
+      },
+      signal,
+      schema: guestSessionResponseSchema,
     });
   }
 

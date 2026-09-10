@@ -28,6 +28,17 @@ export interface ChatSnapshot {
   connection: WebSocketRuntimeState;
   error: string | null;
   waiting: ChatEvent | null;
+  llmSelection: LlmSelection | null;
+}
+export interface LlmSelection {
+  profile_id: string;
+  model_id: string;
+}
+export interface LlmOption extends LlmSelection {
+  profile_name: string;
+  model_name: string;
+  provider_label?: string;
+  is_active_default?: boolean;
 }
 export class ChatClient implements DeepTutorChatPort {
   private snapshot: ChatSnapshot = {
@@ -38,6 +49,7 @@ export class ChatClient implements DeepTutorChatPort {
     connection: 'idle',
     error: null,
     waiting: null,
+    llmSelection: null,
   };
   private listeners = new Set<() => void>();
   readonly transport: WebSocketRuntime;
@@ -94,6 +106,34 @@ export class ChatClient implements DeepTutorChatPort {
     });
     return result.sessions;
   }
+  async listLlmOptions(): Promise<LlmOption[]> {
+    const result = await this.http.request({
+      path: '/api/settings/llm-options',
+      schema: z.object({
+        active: z
+          .object({profile_id: z.string(), model_id: z.string()})
+          .nullable()
+          .optional(),
+        options: z.array(
+          z.object({
+            profile_id: z.string(),
+            model_id: z.string(),
+            profile_name: z.string(),
+            model_name: z.string(),
+            provider_label: z.string().optional(),
+            is_active_default: z.boolean().optional(),
+          }),
+        ),
+      }),
+    });
+    if (!this.snapshot.llmSelection && result.active) {
+      this.update({llmSelection: result.active});
+    }
+    return result.options;
+  }
+  selectLlm(selection: LlmSelection) {
+    this.update({llmSelection: selection});
+  }
   newSession() {
     if (this.snapshot.running || this.snapshot.loading) {
       return;
@@ -123,6 +163,18 @@ export class ChatClient implements DeepTutorChatPort {
         sessionId: id,
         messages: historyMessages(session),
         waiting: null,
+        llmSelection:
+          session.preferences?.llm_selection &&
+          typeof session.preferences.llm_selection === 'object'
+            ? {
+                profile_id: String(
+                  record(session.preferences.llm_selection).profile_id || '',
+                ),
+                model_id: String(
+                  record(session.preferences.llm_selection).model_id || '',
+                ),
+              }
+            : this.snapshot.llmSelection,
       });
       await this.transport.connect();
       if (generation !== this.generation || this.disposed) {
@@ -179,6 +231,9 @@ export class ChatClient implements DeepTutorChatPort {
           content,
           capability,
           ...(attachments.length ? {attachments} : {}),
+          ...(this.snapshot.llmSelection
+            ? {llm_selection: this.snapshot.llmSelection}
+            : {}),
           session_id: this.snapshot.sessionId,
         })
       ) {

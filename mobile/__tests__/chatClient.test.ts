@@ -138,6 +138,20 @@ describe('real chat protocol adapter', () => {
     );
     client.dispose();
   });
+  it('sends the account-selected model with the next turn', async () => {
+    const {client, socket} = setup();
+    client.selectLlm({profile_id: 'shared', model_id: 'fast'});
+    const sending = client.send('question');
+    await Promise.resolve();
+    socket.open();
+    await sending;
+    expect(socket.sent[0]).toEqual(
+      expect.objectContaining({
+        llm_selection: {profile_id: 'shared', model_id: 'fast'},
+      }),
+    );
+    client.dispose();
+  });
   it('does not treat a recoverable error as terminal; cancellation carries a command ID', async () => {
     const {client, socket} = await start();
     socket.event('session', 1);

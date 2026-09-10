@@ -3,6 +3,8 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
+  useState,
   useSyncExternalStore,
 } from 'react';
 import {useExternalStoreRuntime} from '@assistant-ui/core/react';
@@ -16,14 +18,21 @@ import {createRuntimeConfig} from '../config/runtime';
 import {HttpClient, serverWebSocketPath} from '../data/http';
 import {useNetworkStatus} from '../platform/network/NetworkStatusProvider';
 import {ChatClient, type ChatSnapshot} from './ChatClient';
-import {outgoingImages, validateImages} from './imageAttachments';
+import {
+  outgoingAttachments,
+  validateAttachments,
+} from './imageAttachments';
 import type {ChatMessage} from './protocol';
+import {AuthClient} from '../features/auth/AuthClient';
+import type {AuthStatus} from '../features/auth/contracts';
 const Context = createContext<{
   client: ChatClient;
   snapshot: ChatSnapshot;
   http: HttpClient;
   server: string;
   identity: string;
+  isGuest: boolean;
+  trial: AuthStatus['trial'];
 } | null>(null);
 function convertMessage(message: ChatMessage): ThreadMessageLike {
   return {
@@ -51,6 +60,8 @@ export function ChatProvider({
   const {state, clearSession} = useStartup();
   const network = useNetworkStatus();
   const session = state.phase === 'ready' ? state.session : null;
+  const [trial, setTrial] = useState<AuthStatus['trial']>(session?.trial ?? null);
+  const wasRunning = useRef(false);
   const server = session?.serverAddress ?? '';
   const http = useMemo(
     () =>
@@ -93,6 +104,23 @@ export function ChatProvider({
   useEffect(() => {
     client.transport.setNetworkOnline(network.status !== 'offline');
   }, [client, network.status]);
+  useEffect(() => {
+    setTrial(session?.trial ?? null);
+  }, [session]);
+  useEffect(() => {
+    const justFinished = wasRunning.current && !snapshot.running;
+    wasRunning.current = snapshot.running;
+    if (!justFinished || session?.subjectType !== 'guest') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      new AuthClient(http)
+        .getStatus()
+        .then(status => setTrial(status.trial ?? null))
+        .catch(() => undefined);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [http, session?.subjectType, snapshot.running]);
   const runtime = useExternalStoreRuntime<ChatMessage>({
     messages: snapshot.messages,
     isRunning: snapshot.running,
@@ -100,12 +128,12 @@ export function ChatProvider({
     isSendDisabled: snapshot.loading,
     convertMessage,
     onNew: async message => {
-      const images = outgoingImages(message.attachments || []);
-      validateImages(images);
+      const attachments = outgoingAttachments(message.attachments || []);
+      validateAttachments(attachments);
       await client.send(
         message.content.map(p => (p.type === 'text' ? p.text : '')).join('\n'),
         'chat',
-        images,
+        attachments,
       );
     },
     onCancel: () => client.cancel(),
@@ -116,7 +144,15 @@ export function ChatProvider({
   }
   return (
     <Context.Provider
-      value={{client, snapshot, http, server, identity: session.user.id}}>
+      value={{
+        client,
+        snapshot,
+        http,
+        server,
+        identity: session.user.id,
+        isGuest: session.subjectType === 'guest',
+        trial,
+      }}>
       <AssistantRuntimeProvider runtime={runtime}>
         {children}
       </AssistantRuntimeProvider>

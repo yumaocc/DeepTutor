@@ -5,10 +5,12 @@ import type {FetchImplementation} from '../src/data/http';
 import {AuthClient} from '../src/features/auth/AuthClient';
 import {
   authStatusSchema,
+  guestSessionResponseSchema,
   loginResponseSchema,
   registrationStatusSchema,
 } from '../src/features/auth/contracts';
 import {
+  authSessionFromGuest,
   authSessionFromLogin,
   authSessionFromStatus,
   loginErrorMessage,
@@ -109,6 +111,56 @@ describe('mobile login', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('creates a mobile guest session after route discovery', async () => {
+    const trial = {
+      enabled: true,
+      status: 'active',
+      turns_used: 0,
+      turns_limit: 5,
+      turns_remaining: 5,
+      tokens_used: 0,
+      tokens_limit: 25000,
+      tokens_remaining: 25000,
+      cost_used_usd: 0,
+      cost_limit_usd: 0.1,
+      expires_at: 1_800_000_000,
+    };
+    const fetchImpl = jest.fn<FetchImplementation>(async url =>
+      jsonResponse(
+        200,
+        url.endsWith('/status')
+          ? {
+              enabled: true,
+              authenticated: false,
+              guest_trial_available: true,
+            }
+          : {
+              ok: true,
+              subject_type: 'guest',
+              access_token: 'guest-token',
+              user_id: 'gst_example',
+              username: 'Guest',
+              role: 'user',
+              is_admin: false,
+              trial,
+            },
+      ),
+    );
+    const client = new AuthClient(
+      new HttpClient({baseUrl: 'http://192.168.1.2:8001', fetchImpl}),
+    );
+
+    await expect(client.createGuestSession('mobile_install_123')).resolves.toMatchObject({
+      subject_type: 'guest',
+      access_token: 'guest-token',
+      trial,
+    });
+    expect(JSON.parse(String(fetchImpl.mock.calls[1][1].body))).toEqual({
+      client_type: 'mobile',
+      installation_id: 'mobile_install_123',
+    });
+  });
+
   it('validates the identity returned by the cookie login endpoint', () => {
     expect(loginResponseSchema.safeParse(loginPayload).success).toBe(true);
     expect(
@@ -144,12 +196,72 @@ describe('mobile login', () => {
       refreshToken: null,
       expiresAt: null,
       serverAddress: 'https://learn.example.com',
+      subjectType: 'account',
+      trial: null,
       user: {
         id: 'u_alice',
         username: 'alice',
         role: 'user',
         isAdmin: false,
       },
+    });
+  });
+
+  it('keeps the account bearer token returned after claiming a guest session', () => {
+    expect(
+      authSessionFromLogin(
+        {
+          ...loginPayload,
+          access_token: 'account-token',
+          claim: {
+            claimed: true,
+            guest_id: 'gst_example',
+            session_count: 2,
+          },
+        },
+        'https://learn.example.com',
+      ),
+    ).toMatchObject({
+      accessToken: 'account-token',
+      subjectType: 'account',
+      user: {id: 'u_alice'},
+    });
+  });
+
+  it('creates a secure bearer session for a mobile guest trial', () => {
+    const trial = {
+      enabled: true,
+      status: 'active',
+      turns_used: 0,
+      turns_limit: 5,
+      turns_remaining: 5,
+      tokens_used: 0,
+      tokens_limit: 25000,
+      tokens_remaining: 25000,
+      cost_used_usd: 0,
+      cost_limit_usd: 0.1,
+      expires_at: 1_800_000_000,
+    };
+    const response = guestSessionResponseSchema.parse({
+      ok: true,
+      subject_type: 'guest',
+      access_token: 'signed-guest-token',
+      user_id: 'gst_example',
+      username: 'Guest',
+      role: 'user',
+      is_admin: false,
+      trial,
+    });
+
+    expect(
+      authSessionFromGuest(response, 'http://192.168.1.2:8001'),
+    ).toMatchObject({
+      authEnabled: true,
+      accessToken: 'signed-guest-token',
+      expiresAt: null,
+      subjectType: 'guest',
+      trial,
+      user: {id: 'gst_example', isAdmin: false},
     });
   });
 

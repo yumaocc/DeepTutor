@@ -1,6 +1,10 @@
 import {HttpError, isHttpError} from '../../data/http';
 import type {AuthSession} from './AuthSessionRepository';
-import type {AuthStatus, LoginResponse} from './contracts';
+import type {
+  AuthStatus,
+  GuestSessionResponse,
+  LoginResponse,
+} from './contracts';
 
 export function authSessionFromLogin(
   response: LoginResponse,
@@ -8,10 +12,12 @@ export function authSessionFromLogin(
 ): AuthSession {
   return {
     authEnabled: true,
-    accessToken: null,
+    accessToken: response.access_token ?? null,
     refreshToken: null,
     expiresAt: null,
     serverAddress,
+    subjectType: 'account',
+    trial: null,
     user: {
       id: response.user_id,
       username: response.username,
@@ -39,11 +45,36 @@ export function authSessionFromStatus(
     refreshToken: null,
     expiresAt: null,
     serverAddress,
+    subjectType: response.subject_type ?? (response.enabled ? 'account' : 'local'),
+    trial: response.trial ?? null,
     user: {
       id: response.user_id,
       username: response.username,
       role: response.role,
       isAdmin: response.is_admin ?? false,
+    },
+  };
+}
+
+export function authSessionFromGuest(
+  response: GuestSessionResponse,
+  serverAddress: string,
+): AuthSession {
+  return {
+    authEnabled: response.subject_type !== 'local',
+    accessToken: response.access_token,
+    refreshToken: null,
+    // The server separately enforces the trial deadline. Keep the signed
+    // Guest identity so an expired trial can still be claimed at login.
+    expiresAt: null,
+    serverAddress,
+    subjectType: response.subject_type,
+    trial: response.trial ?? null,
+    user: {
+      id: response.user_id,
+      username: response.username,
+      role: response.role,
+      isAdmin: response.is_admin,
     },
   };
 }

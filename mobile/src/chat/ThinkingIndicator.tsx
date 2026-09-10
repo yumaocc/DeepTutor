@@ -8,7 +8,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import {Text} from 'react-native-paper';
+import {Surface, Text} from 'react-native-paper';
 import {chatTokens as tokens} from '../theme/chatTheme';
 
 /** Native-driver loading signal; no layout animation or simulated progress. */
@@ -73,7 +73,9 @@ export function ThinkingIndicator({label = '正在思考'}: {label?: string}) {
     return () => animations.forEach(animation => animation.stop());
   }, [active, bars, reduced]);
   return (
-    <View
+    <Surface
+      mode="flat"
+      elevation={0}
       style={styles.root}
       accessible
       accessibilityRole="progressbar"
@@ -111,7 +113,7 @@ export function ThinkingIndicator({label = '正在思考'}: {label?: string}) {
         ))}
       </View>
       <Text style={styles.label}>{label}</Text>
-    </View>
+    </Surface>
   );
 }
 const styles = StyleSheet.create({
@@ -124,6 +126,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: tokens.radius.full,
     backgroundColor: tokens.color.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
   },
   bars: {
     flexDirection: 'row',

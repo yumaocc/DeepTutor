@@ -9,6 +9,8 @@ export const tokens = {
     body: '#464652',
     muted: '#6C6C7B',
     border: '#DDDDE6',
+    shadowSoft: '#CBC6DE',
+    scrim: 'rgba(17, 17, 24, 0.24)',
     primary: '#7563EE',
     primaryPressed: '#493BA6',
     primaryMuted: '#EFEDFC',

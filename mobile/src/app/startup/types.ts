@@ -3,8 +3,14 @@ import type {AuthSession} from '../../features/auth/AuthSessionRepository';
 
 export type StartupState =
   | {phase: 'booting'}
+  | {phase: 'provisioning_guest'}
   | {phase: 'needs_server'}
-  | {phase: 'needs_auth'; settings: RuntimeSettings}
+  | {
+      phase: 'needs_auth';
+      settings: RuntimeSettings;
+      canContinueAsGuest?: boolean;
+      guestSession?: AuthSession;
+    }
   | {phase: 'offline'; settings: RuntimeSettings; session: AuthSession}
   | {phase: 'upgrade_required'; settings: RuntimeSettings}
   | {phase: 'ready'; settings: RuntimeSettings; session: AuthSession}
@@ -16,4 +22,6 @@ export interface StartupActions {
   acceptSession(session: AuthSession): Promise<void>;
   changeServer(): Promise<void>;
   clearSession(): Promise<void>;
+  showLogin(): void;
+  continueAsGuest(): Promise<void>;
 }
