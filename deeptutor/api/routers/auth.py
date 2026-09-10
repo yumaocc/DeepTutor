@@ -2,8 +2,11 @@
 
 from contextvars import Token as _CtxToken
 from datetime import datetime, timedelta, timezone
+import hashlib
 import logging
 import re
+from typing import Literal
+import uuid
 
 from fastapi import (
     APIRouter,
@@ -44,6 +47,7 @@ from deeptutor.multi_user.models import AccountPreset
 from deeptutor.multi_user.paths import local_admin_user
 from deeptutor.services.auth import (
     AUTH_ENABLED,
+    AUTH_SECRET,
     POCKETBASE_ENABLED,
     TOKEN_EXPIRE_HOURS,
     TokenPayload,
@@ -51,6 +55,7 @@ from deeptutor.services.auth import (
     authenticate,
     authenticate_device,
     authenticate_pb,
+    create_guest_token,
     create_token,
     decode_token,
     delete_user,
@@ -74,6 +79,7 @@ router = APIRouter()
 
 _COOKIE_NAME = "dt_token"
 _COOKIE_MAX_AGE = TOKEN_EXPIRE_HOURS * 3600
+_GUEST_CLAIM_TOKEN_TTL_HOURS = 24 * 30
 
 
 def _cookie_attrs() -> dict:
@@ -104,6 +110,14 @@ class LoginRequest(BaseModel):
 
     username: str
     password: str
+
+
+class GuestSessionRequest(BaseModel):
+    """Mobile-only request for a restricted anonymous trial identity."""
+
+    client_type: Literal["mobile"]
+    installation_id: str = Field(min_length=8, max_length=200)
+    app_version: str = Field(default="", max_length=80)
 
 
 class DeviceLoginRequest(BaseModel):
@@ -186,6 +200,9 @@ class AuthStatusResponse(BaseModel):
     avatar: str = ""
     preset: AccountPreset | None = None
     learning_policy: dict | None = None
+    subject_type: Literal["account", "guest", "local"] | None = None
+    guest_trial_available: bool = False
+    trial: dict | None = None
 
 
 class UserInfo(BaseModel):
@@ -261,6 +278,63 @@ def _extract_token(authorization: str | None, dt_token: str | None) -> str | Non
     return _bearer_token_from_header(authorization) or dt_token
 
 
+def _active_guest_trial(payload: TokenPayload) -> dict | None:
+    if payload.subject_type != "guest":
+        return None
+    from deeptutor.services.trial import get_guest_trial_ledger
+
+    trial = get_guest_trial_ledger().get_status(payload.user_id)
+    if trial is None or trial.get("status") in {"expired", "revoked", "claimed"}:
+        return None
+    return trial
+
+
+def _claimable_guest_trial(payload: TokenPayload) -> dict | None:
+    """Return a Guest ledger row while its signed claim token is valid.
+
+    Conversation access still goes through ``_active_guest_trial``. Login is
+    intentionally broader so an expired/exhausted Guest can attach preserved
+    chat history to an account, and a lost login response can be retried after
+    an idempotent claim.
+    """
+    if payload.subject_type != "guest":
+        return None
+    from deeptutor.services.trial import get_guest_trial_ledger
+
+    trial = get_guest_trial_ledger().get_status(payload.user_id)
+    if trial is None or trial.get("status") == "revoked":
+        return None
+    return trial
+
+
+def _guest_trial_is_available(settings: dict) -> bool:
+    selection = settings.get("llm_selection")
+    if not settings.get("enabled", True) or not isinstance(selection, dict):
+        return False
+    profile_id = str(selection.get("profile_id") or "").strip()
+    model_id = str(selection.get("model_id") or "").strip()
+    if not profile_id or not model_id:
+        return False
+
+    from deeptutor.multi_user.model_access import admin_catalog, is_owner_bound
+
+    profiles = (
+        admin_catalog().get("services", {}).get("llm", {}).get("profiles", []) or []
+    )
+    for profile in profiles:
+        if not isinstance(profile, dict) or str(profile.get("id") or "") != profile_id:
+            continue
+        if is_owner_bound(profile):
+            return False
+        return any(
+            isinstance(model, dict)
+            and str(model.get("id") or "") == model_id
+            and bool(str(model.get("model") or "").strip())
+            for model in profile.get("models", []) or []
+        )
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Dependencies — reusable auth guards for other routers
 # ---------------------------------------------------------------------------
@@ -333,6 +407,13 @@ async def require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if payload.subject_type == "guest" and _active_guest_trial(payload) is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Guest trial is no longer active",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     _install_current_user(payload)
     return payload
 
@@ -370,8 +451,11 @@ async def ws_require_auth(ws: WebSocket) -> _CtxToken | _WsAuthFailed:
 
     token = ws.query_params.get("token") or ws.cookies.get(_COOKIE_NAME)
     payload = decode_token(token) if token else None
-    if not payload:
+    if not payload or (payload.subject_type == "guest" and _active_guest_trial(payload) is None):
         await ws.close(code=4001)
+        return ws_auth_failed
+    if payload.subject_type == "guest" and ws.url.path != "/ws":
+        await ws.close(code=4003)
         return ws_auth_failed
 
     return _install_current_user(payload)
@@ -417,9 +501,20 @@ def _learning_surface_for_path(path: str) -> str:
 
 async def require_learning_surface(
     request: Request,
-    _: TokenPayload | None = Depends(require_auth),
+    payload: TokenPayload | None = Depends(require_auth),
 ) -> None:
     """Second-stage default-deny guard for configured learning accounts."""
+    if payload is not None and payload.subject_type == "guest":
+        path = "/" + str(request.url.path or "").lstrip("/")
+        if path != "/api/sessions" and not path.startswith("/api/sessions/"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "guest_capability_forbidden",
+                    "message": "Guest access is limited to chat conversations.",
+                },
+            )
+        return
     from deeptutor.multi_user.learning_access import assert_learning_surface
 
     try:
@@ -494,6 +589,7 @@ async def auth_status(
             role="admin",
             is_admin=True,
             preset="standard",
+            subject_type="local",
         )
 
     token = _extract_token(authorization, dt_token)
@@ -501,7 +597,12 @@ async def auth_status(
     avatar = ""
     preset: AccountPreset | None = None
     learning_policy = None
-    if payload is not None:
+    trial = None
+    if payload is not None and payload.subject_type == "guest":
+        trial = _active_guest_trial(payload)
+        if trial is None:
+            payload = None
+    if payload is not None and payload.subject_type != "guest":
         info = get_user_info(payload.username)
         if info:
             avatar = str(info.get("avatar") or "")
@@ -526,14 +627,119 @@ async def auth_status(
         avatar=avatar,
         preset=preset,
         learning_policy=learning_policy,
+        subject_type=payload.subject_type if payload else None,
+        guest_trial_available=_guest_trial_is_available(
+            dict(load_auth_settings().get("guest_trial") or {})
+        ),
+        trial=trial,
     )
 
 
+@router.post("/guest-session")
+async def create_guest_session(body: GuestSessionRequest, request: Request) -> dict:
+    """Create a restricted mobile Guest identity and its persistent trial ledger."""
+    if not AUTH_ENABLED:
+        return {
+            "ok": True,
+            "subject_type": "local",
+            "access_token": None,
+            "user_id": "local-admin",
+            "username": "local",
+            "role": "admin",
+            "is_admin": True,
+            "trial": None,
+        }
+    settings = dict(load_auth_settings().get("guest_trial") or {})
+    if not bool(settings.get("enabled", True)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "guest_trial_disabled", "message": "Guest trial is disabled."},
+        )
+    if not _guest_trial_is_available(settings):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "guest_trial_model_not_configured",
+                "message": "Guest trial model is not configured.",
+            },
+        )
+
+    installation_hash = hashlib.sha256(
+        f"{AUTH_SECRET}:{body.installation_id}".encode("utf-8")
+    ).hexdigest()
+    client_host = request.client.host if request.client else "unknown"
+    request_hash = hashlib.sha256(
+        f"{AUTH_SECRET}:guest-bootstrap:{client_host}".encode("utf-8")
+    ).hexdigest()
+    from deeptutor.services.trial import get_guest_trial_ledger
+
+    try:
+        guest_id, trial = get_guest_trial_ledger().get_or_create_guest(
+            f"gst_{uuid.uuid4().hex}",
+            installation_hash=installation_hash,
+            ttl_hours=int(settings.get("ttl_hours", 168)),
+            turns_limit=int(settings.get("turn_limit", 5)),
+            tokens_limit=int(settings.get("token_limit", 25_000)),
+            cost_limit_usd=float(settings.get("cost_limit_usd", 0.10)),
+            request_hash=request_hash,
+        )
+    except RuntimeError as exc:
+        if str(exc) != "guest_bootstrap_rate_limited":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "guest_bootstrap_rate_limited",
+                "message": "Too many new guest trials. Try again later.",
+            },
+        ) from exc
+    if trial.get("status") == "expired":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "guest_trial_expired",
+                "message": "The free trial for this installation has expired.",
+            },
+        )
+    token = create_guest_token(
+        guest_id,
+        ttl_hours=max(
+            int(settings.get("ttl_hours", 168)),
+            _GUEST_CLAIM_TOKEN_TTL_HOURS,
+        ),
+    )
+    return {
+        "ok": True,
+        "subject_type": "guest",
+        "access_token": token,
+        "user_id": guest_id,
+        "username": "Guest",
+        "role": "user",
+        "is_admin": False,
+        "trial": trial,
+    }
+
+
 @router.post("/login")
-async def login(body: LoginRequest, response: Response) -> dict:
+async def login(
+    body: LoginRequest,
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
     """Validate credentials and set a JWT cookie."""
     if not AUTH_ENABLED:
         return {"ok": True, "message": "Auth is disabled — no login required."}
+
+    guest_payload = None
+    guest_token = _bearer_token_from_header(authorization)
+    if guest_token:
+        candidate = decode_token(guest_token)
+        if (
+            candidate is not None
+            and candidate.subject_type == "guest"
+            and _claimable_guest_trial(candidate) is not None
+        ):
+            guest_payload = candidate
 
     if POCKETBASE_ENABLED:
         # PocketBase mode: email = username field for backwards-compat with the
@@ -545,6 +751,15 @@ async def login(body: LoginRequest, response: Response) -> dict:
                 detail="Incorrect email or password",
             )
         payload, pb_token = pb_result
+        claim = None
+        if guest_payload is not None:
+            from deeptutor.services.trial.claim import claim_guest_history
+
+            claim = await claim_guest_history(
+                guest_payload.user_id,
+                payload.user_id,
+                is_admin=payload.role == "admin",
+            )
         response.set_cookie(value=pb_token, max_age=_COOKIE_MAX_AGE, **_cookie_attrs())
         logger.info(f"User '{payload.username}' logged in via PocketBase (role={payload.role!r})")
         return {
@@ -553,6 +768,8 @@ async def login(body: LoginRequest, response: Response) -> dict:
             "username": payload.username,
             "role": payload.role,
             "is_admin": payload.role == "admin",
+            "access_token": pb_token,
+            "claim": claim,
         }
 
     # Standard JWT + bcrypt mode
@@ -563,6 +780,15 @@ async def login(body: LoginRequest, response: Response) -> dict:
             detail="Incorrect username or password",
         )
 
+    claim = None
+    if guest_payload is not None:
+        from deeptutor.services.trial.claim import claim_guest_history
+
+        claim = await claim_guest_history(
+            guest_payload.user_id,
+            result.user_id,
+            is_admin=result.role == "admin",
+        )
     token = create_token(result.username, result.role, result.user_id)
     response.set_cookie(value=token, max_age=_COOKIE_MAX_AGE, **_cookie_attrs())
 
@@ -573,6 +799,8 @@ async def login(body: LoginRequest, response: Response) -> dict:
         "username": result.username,
         "role": result.role,
         "is_admin": result.role == "admin",
+        "access_token": token,
+        "claim": claim,
     }
 
 

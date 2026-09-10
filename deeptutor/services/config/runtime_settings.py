@@ -67,12 +67,21 @@ CHAT_ATTACHMENT_MAX_TOTAL_MB_RANGE = (1, 2048)
 CHAT_ATTACHMENT_CHARS_RANGE = (10_000, 5_000_000)
 
 DEFAULT_AUTH_SETTINGS: dict[str, Any] = {
-    "version": 1,
+    "version": 2,
     "enabled": False,
     "username": "admin",
     "password_hash": "",
     "token_expire_hours": 24,
     "cookie_secure": False,
+    "guest_trial": {
+        "enabled": True,
+        "ttl_hours": 168,
+        "turn_limit": 5,
+        "token_limit": 25_000,
+        "cost_limit_usd": 0.10,
+        "concurrent_turn_limit": 1,
+        "llm_selection": {"profile_id": "", "model_id": ""},
+    },
 }
 
 DEFAULT_INTEGRATIONS_SETTINGS: dict[str, Any] = {
@@ -377,6 +386,13 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
 def _coerce_int(value: Any, default: int) -> int:
     try:
         return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    try:
+        return float(str(value).strip())
     except (TypeError, ValueError):
         return default
 
@@ -1180,13 +1196,35 @@ class RuntimeSettingsService:
         }
 
     def _normalize_auth(self, settings: dict[str, Any]) -> dict[str, Any]:
+        raw_trial = settings.get("guest_trial")
+        trial = raw_trial if isinstance(raw_trial, dict) else {}
+        raw_selection = trial.get("llm_selection")
+        selection = raw_selection if isinstance(raw_selection, dict) else {}
         return {
-            "version": 1,
+            "version": 2,
             "enabled": _coerce_bool(settings.get("enabled"), False),
             "username": _string(settings.get("username")) or "admin",
             "password_hash": _string(settings.get("password_hash")),
             "token_expire_hours": max(1, _coerce_int(settings.get("token_expire_hours"), 24)),
             "cookie_secure": _coerce_bool(settings.get("cookie_secure"), False),
+            "guest_trial": {
+                "enabled": _coerce_bool(trial.get("enabled"), True),
+                "ttl_hours": max(1, _coerce_int(trial.get("ttl_hours"), 168)),
+                "turn_limit": max(1, _coerce_int(trial.get("turn_limit"), 5)),
+                "token_limit": max(1, _coerce_int(trial.get("token_limit"), 25_000)),
+                "cost_limit_usd": max(
+                    0.0,
+                    _coerce_float(trial.get("cost_limit_usd"), 0.10),
+                ),
+                "concurrent_turn_limit": max(
+                    1,
+                    _coerce_int(trial.get("concurrent_turn_limit"), 1),
+                ),
+                "llm_selection": {
+                    "profile_id": _string(selection.get("profile_id")),
+                    "model_id": _string(selection.get("model_id")),
+                },
+            },
         }
 
     def _normalize_integrations(self, settings: dict[str, Any]) -> dict[str, Any]:

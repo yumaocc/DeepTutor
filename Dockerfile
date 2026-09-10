@@ -75,7 +75,8 @@ WORKDIR /app
 # Install system dependencies
 # Note: libgl1 and libglib2.0-0 are required for OpenCV (used by mineru)
 # Rust is required for building tiktoken and other packages without pre-built wheels
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update && \
+    apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
     curl \
     git \
     build-essential \
@@ -132,7 +133,8 @@ WORKDIR /app
 #       installs with `pip install git+…`, which shells out to git. It is needed
 #       in *this* image and not in the runner: installing is a privileged
 #       main-app action, running is the runner's (Dockerfile.runner).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update && \
+    apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
     curl \
     ca-certificates \
     bash \

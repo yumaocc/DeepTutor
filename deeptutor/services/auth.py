@@ -39,12 +39,15 @@ logger = logging.getLogger(__name__)
 
 _AUTH_SETTINGS = load_auth_settings()
 _INTEGRATIONS_SETTINGS = load_integrations_settings()
+_GUEST_TRIAL_SETTINGS = dict(_AUTH_SETTINGS.get("guest_trial") or {})
 
 AUTH_ENABLED: bool = bool(_AUTH_SETTINGS["enabled"])
 AUTH_USERNAME: str = str(_AUTH_SETTINGS["username"])
 AUTH_PASSWORD_HASH: str = str(_AUTH_SETTINGS["password_hash"])
 AUTH_SECRET: str = ""
 TOKEN_EXPIRE_HOURS: int = int(_AUTH_SETTINGS["token_expire_hours"])
+GUEST_TRIAL_ENABLED: bool = bool(_GUEST_TRIAL_SETTINGS.get("enabled", True))
+GUEST_TOKEN_EXPIRE_HOURS: int = int(_GUEST_TRIAL_SETTINGS.get("ttl_hours", 168))
 
 # PocketBase auth mode — active when integrations.pocketbase_url is set and auth is enabled.
 # When enabled, login/register proxy to PocketBase and token validation uses
@@ -55,7 +58,7 @@ POCKETBASE_ENABLED: bool = bool(POCKETBASE_BASE_URL) and AUTH_ENABLED
 _ALGORITHM = "HS256"
 
 
-if AUTH_ENABLED and not POCKETBASE_ENABLED and not AUTH_SECRET:
+if AUTH_ENABLED and (not POCKETBASE_ENABLED or GUEST_TRIAL_ENABLED) and not AUTH_SECRET:
     from deeptutor.multi_user.identity import load_or_create_auth_secret
 
     AUTH_SECRET = load_or_create_auth_secret()
@@ -75,6 +78,7 @@ class TokenPayload:
     user_id: str = ""
     device_credential_id: str = ""
     device_session_nonce: str = ""
+    subject_type: str = "account"
 
 
 # ---------------------------------------------------------------------------
@@ -273,12 +277,35 @@ def create_token(
         "sub": username,
         "role": role,
         "uid": user_id,
+        "st": "account",
         "dcid": device_credential_id,
         "dcs": device_session_nonce,
         "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, AUTH_SECRET, algorithm=_ALGORITHM)
+
+
+def create_guest_token(guest_id: str, *, ttl_hours: int | None = None) -> str:
+    """Create a locally signed token for a restricted mobile Guest identity."""
+    from jose import jwt
+
+    if not AUTH_SECRET:
+        raise RuntimeError("Guest token signing is not configured")
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "sub": "Guest",
+            "role": "user",
+            "uid": guest_id,
+            "st": "guest",
+            "exp": now
+            + timedelta(hours=max(1, ttl_hours or GUEST_TOKEN_EXPIRE_HOURS)),
+            "iat": now,
+        },
+        AUTH_SECRET,
+        algorithm=_ALGORITHM,
+    )
 
 
 def decode_token(token: str) -> TokenPayload | None:
@@ -294,6 +321,29 @@ def decode_token(token: str) -> TokenPayload | None:
     if not token:
         return None
 
+    # Guest tokens are always signed locally, including PocketBase deployments.
+    # Only accept a locally decoded token on this early path when it explicitly
+    # carries the guest subject marker; account tokens continue through their
+    # configured built-in/PocketBase validation path.
+    if AUTH_SECRET:
+        from jose import JWTError, jwt
+
+        try:
+            local_payload = jwt.decode(token, AUTH_SECRET, algorithms=[_ALGORITHM])
+            if local_payload.get("st") == "guest":
+                guest_id = str(local_payload.get("uid") or "")
+                if guest_id.startswith("gst_"):
+                    return TokenPayload(
+                        username="Guest",
+                        role="user",
+                        user_id=guest_id,
+                        subject_type="guest",
+                    )
+                return None
+        except JWTError:
+            if not POCKETBASE_ENABLED:
+                return None
+
     if POCKETBASE_ENABLED:
         from deeptutor.services.pocketbase_client import validate_pb_token
 
@@ -304,6 +354,7 @@ def decode_token(token: str) -> TokenPayload | None:
             username=payload["username"],
             role=payload.get("role", "user"),
             user_id=str(payload.get("id") or payload.get("uid") or payload.get("user_id") or ""),
+            subject_type="account",
         )
 
     # Standard JWT + bcrypt mode
@@ -338,6 +389,7 @@ def decode_token(token: str) -> TokenPayload | None:
             user_id=user_id,
             device_credential_id=device_credential_id,
             device_session_nonce=device_session_nonce,
+            subject_type=str(payload.get("st") or "account"),
         )
     except JWTError:
         return None

@@ -15,6 +15,7 @@ import {
   Library,
   ListChecks,
   MessagesSquare,
+  MessageCircleMore,
   Mic,
   Network,
   Palette,
@@ -218,6 +219,18 @@ const MODEL_CHILDREN: SettingsLeaf[] = [
 ];
 
 const CHAT_CHILDREN: SettingsLeaf[] = [
+  {
+    key: "guest-trial",
+    href: "/settings#guest-trial",
+    label: { zh: "移动端试用", en: "Mobile trial" },
+    blurb: {
+      zh: "配置免登录对话的默认模型、有效期与额度。",
+      en: "Default model, lifetime, and quota for guest chat.",
+    },
+    icon: MessageCircleMore,
+    tile: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+    adminOnly: true,
+  },
   {
     key: "video-learning",
     href: "/settings#video-learning",

@@ -62,6 +62,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _trial_cost_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
+    for event in reversed(events):
+        if event.get("type") != StreamEventType.RESULT.value:
+            continue
+        metadata = event.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        nested = metadata.get("metadata")
+        summary = nested.get("cost_summary") if isinstance(nested, dict) else None
+        if not isinstance(summary, dict):
+            summary = metadata.get("cost_summary")
+        if isinstance(summary, dict):
+            return summary
+    return {}
+
+
 class TurnExecutor:
     if TYPE_CHECKING:
         store: SessionStoreProtocol
@@ -698,7 +714,11 @@ class TurnExecutor:
                 enabled_tools=payload.get("tools"),
                 # Selected-text tutoring must stay isolated from global
                 # memory and every other auto-mounted built-in.
-                allowed_builtin_tools=[] if selection_tutor_context else None,
+                allowed_builtin_tools=(
+                    []
+                    if selection_tutor_context or bool(payload.get("guest_trial"))
+                    else None
+                ),
                 active_capability=payload.get("capability"),
                 knowledge_bases=payload.get("knowledge_bases", []),
                 attachments=attachments,
@@ -1073,6 +1093,41 @@ class TurnExecutor:
                     retryable=True,
                 )
         finally:
+            trial_reservation_id = str(payload.get("trial_reservation_id") or "")
+            if trial_reservation_id:
+                from deeptutor.services.trial import get_guest_trial_ledger
+
+                summary = _trial_cost_summary(assistant_events)
+                produced_output = bool(summary or content_segments or generated_attachments)
+                try:
+                    if produced_output:
+                        estimated_tokens = max(
+                            0,
+                            int(
+                                summary.get("total_tokens")
+                                or (
+                                    len(str(payload.get("content") or ""))
+                                    + len(_persisted_answer())
+                                )
+                                / 3.5
+                            ),
+                        )
+                        await asyncio.to_thread(
+                            get_guest_trial_ledger().settle_turn,
+                            trial_reservation_id,
+                            total_tokens=estimated_tokens,
+                            total_cost_usd=float(summary.get("total_cost_usd") or 0.0),
+                        )
+                    else:
+                        await asyncio.to_thread(
+                            get_guest_trial_ledger().release_turn,
+                            trial_reservation_id,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to finalize Guest trial reservation %s",
+                        trial_reservation_id,
+                    )
             if llm_scope_token is not None and reset_active_llm_selection is not None:
                 reset_active_llm_selection(llm_scope_token)
             # Drop the reply queue first — any in-flight ``submit_user_reply``

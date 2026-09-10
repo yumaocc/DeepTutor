@@ -9,8 +9,10 @@ import ToolsSettingsPage from "./ToolsSettingsSection";
 import CapabilitiesSettingsPage from "./CapabilitiesSettingsSection";
 import StarterSettingsPage from "./StartersSettingsSection";
 import AttachmentSettingsPage from "./AttachmentsSettingsSection";
+import GuestTrialSettingsPage from "./GuestTrialSettingsSection";
 
 const CHAT_SECTIONS = [
+  { key: "guest-trial", Component: GuestTrialSettingsPage },
   { key: "video-learning", Component: VideoLearningSettingsPage },
   { key: "tools", Component: ToolsSettingsPage },
   { key: "capabilities", Component: CapabilitiesSettingsPage },

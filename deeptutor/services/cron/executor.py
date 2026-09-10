@@ -108,11 +108,13 @@ async def _execute_partner_job(job: CronJob) -> tuple[str, str | None]:
         from deeptutor.partners.bus.events import OutboundMessage
 
         delivery_meta["_cron_job_id"] = job.id
+        media = list(delivery_meta.pop("_media", []) or [])
         await instance.runner.bus.publish_outbound(
             OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
                 content=final,
+                media=media,
                 metadata=delivery_meta,
             )
         )

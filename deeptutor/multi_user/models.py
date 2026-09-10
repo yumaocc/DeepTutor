@@ -9,6 +9,7 @@ from typing import Any, Literal
 Role = Literal["admin", "user"]
 AccountPreset = Literal["standard", "learner", "custom"]
 ScopeKind = Literal["admin", "user"]
+SubjectType = Literal["account", "guest", "local"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +58,7 @@ class CurrentUser:
     username: str
     role: Role
     scope: UserScope
+    subject_type: SubjectType = "account"
 
     @property
     def is_admin(self) -> bool:
@@ -68,6 +70,7 @@ class CurrentUser:
             "username": self.username,
             "role": self.role,
             "is_admin": self.is_admin,
+            "subject_type": self.subject_type,
         }
 
 

@@ -33,6 +33,9 @@ def user_from_token_payload(payload: Any | None) -> CurrentUser:
     user_id = str(getattr(payload, "user_id", "") or "")
     username = str(getattr(payload, "username", "") or "local")
     role = str(getattr(payload, "role", "user") or "user")
+    subject_type = str(getattr(payload, "subject_type", "account") or "account")
+    if subject_type not in {"account", "guest", "local"}:
+        subject_type = "account"
     if role not in {"admin", "user"}:
         role = "user"
     if not user_id:
@@ -42,4 +45,5 @@ def user_from_token_payload(payload: Any | None) -> CurrentUser:
         username=username,
         role=role,  # type: ignore[arg-type]
         scope=scope_for_user(user_id, is_admin=role == "admin"),
+        subject_type=subject_type,  # type: ignore[arg-type]
     )

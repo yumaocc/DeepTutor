@@ -16,6 +16,7 @@ Event → IM mapping:
 * trace-only narration rounds (``call_role=narration``) → optional
   ``_progress`` messages (``send_progress`` channel flag)
 * ``TOOL_CALL``                                  → optional ``_tool_hint``
+* image ``artifact`` sources                     → outbound IM media
 """
 
 from __future__ import annotations
@@ -58,6 +59,37 @@ ChannelActivityCallback = Callable[[InboundMessage, dict[str, Any]], Awaitable[N
 _MAX_IMAGE_BYTES = 8 * 1024 * 1024
 _MAX_MEDIA_BYTES = 10 * 1024 * 1024
 _TOOL_HINT_MAX_CHARS = 120
+_MAX_OUTBOUND_IMAGES = 4
+
+
+def _collect_outbound_image_artifacts(
+    delivery_meta: dict[str, Any], sources: Any
+) -> None:
+    """Collect generated image artifacts for delivery by the IM channel."""
+    if not isinstance(sources, list):
+        return
+    media = delivery_meta.setdefault("_media", [])
+    if not isinstance(media, list):
+        media = []
+        delivery_meta["_media"] = media
+    seen = {str(path) for path in media}
+    for source in sources:
+        if len(media) >= _MAX_OUTBOUND_IMAGES:
+            break
+        if not isinstance(source, dict) or source.get("type") != "artifact":
+            continue
+        mime_type = str(source.get("mime_type") or "").lower()
+        path = str(source.get("path") or "").strip()
+        if not mime_type.startswith("image/") or not path or path in seen:
+            continue
+        artifact = Path(path)
+        try:
+            if not artifact.is_file() or artifact.stat().st_size > _MAX_MEDIA_BYTES:
+                continue
+        except OSError:
+            continue
+        media.append(path)
+        seen.add(path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,12 +240,29 @@ class PartnerRunner:
                 "external": True,
             },
         )
-        if final:
+        media = list(delivery_meta.pop("_media", []) or [])
+        if media and delivery_meta.get("_streamed"):
+            media_meta = {
+                key: value
+                for key, value in delivery_meta.items()
+                if key != "_streamed"
+            }
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content="",
+                    media=media,
+                    metadata=media_meta,
+                )
+            )
+        elif final or media:
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=msg.channel,
                     chat_id=msg.chat_id,
                     content=final,
+                    media=media,
                     metadata=delivery_meta,
                 )
             )
@@ -482,6 +531,12 @@ class PartnerRunner:
                             if is_im and send_tool_hints and event.content:
                                 hint = _format_tool_hint(event.content, meta.get("args"))
                                 await self._publish_hint(msg, hint, tool_hint=True)
+
+                        elif event.type == StreamEventType.SOURCES:
+                            if delivery_meta is not None:
+                                _collect_outbound_image_artifacts(
+                                    delivery_meta, meta.get("sources")
+                                )
 
                         elif event.type == StreamEventType.PROGRESS:
                             if (

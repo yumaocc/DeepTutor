@@ -96,6 +96,7 @@ def local_admin_user() -> CurrentUser:
         username=LOCAL_ADMIN_USERNAME,
         role="admin",
         scope=admin_scope(),
+        subject_type="local",
     )
 
 

@@ -66,6 +66,35 @@ def test_capability_routing_defaults_to_disabled(tmp_path) -> None:
     assert service.load_system()["capability_routing_enabled"] is False
 
 
+def test_guest_trial_defaults_and_model_selection_are_normalized(tmp_path) -> None:
+    service = RuntimeSettingsService(tmp_path / "settings", process_env={})
+
+    defaults = service.load_auth(include_process_overrides=False)["guest_trial"]
+    assert defaults["enabled"] is True
+    assert defaults["turn_limit"] == 5
+    assert defaults["token_limit"] == 25_000
+
+    saved = service.save_auth(
+        {
+            "enabled": True,
+            "guest_trial": {
+                "turn_limit": "7",
+                "token_limit": "30000",
+                "llm_selection": {
+                    "profile_id": "shared-provider",
+                    "model_id": "trial-model",
+                },
+            },
+        }
+    )
+    assert saved["guest_trial"]["turn_limit"] == 7
+    assert saved["guest_trial"]["token_limit"] == 30_000
+    assert saved["guest_trial"]["llm_selection"] == {
+        "profile_id": "shared-provider",
+        "model_id": "trial-model",
+    }
+
+
 def test_web_search_source_filter_defaults_to_safe_runtime_json(tmp_path) -> None:
     service = RuntimeSettingsService(tmp_path / "settings")
 

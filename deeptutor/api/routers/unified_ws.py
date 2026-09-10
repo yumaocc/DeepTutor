@@ -218,9 +218,15 @@ async def unified_websocket(ws: WebSocket) -> None:
                         }
                     )
                 except RuntimeError as exc:
+                    message = str(exc)
+                    error_code = (
+                        message
+                        if message.startswith("guest_")
+                        else "start_turn_rejected"
+                    )
                     await send_error(
-                        str(exc),
-                        error_code="start_turn_rejected",
+                        message,
+                        error_code=error_code,
                         session_id=str(msg.get("session_id") or ""),
                         terminal=True,
                     )

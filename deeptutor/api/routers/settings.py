@@ -250,6 +250,17 @@ class ChatAttachmentSettingsUpdate(BaseModel):
     )
 
 
+class GuestTrialSettingsUpdate(BaseModel):
+    enabled: bool
+    ttl_hours: int = Field(ge=1, le=24 * 365)
+    turn_limit: int = Field(ge=1, le=10_000)
+    token_limit: int = Field(ge=1, le=100_000_000)
+    cost_limit_usd: float = Field(ge=0, le=100_000)
+    concurrent_turn_limit: int = Field(ge=1, le=20)
+    profile_id: str = Field(default="", max_length=120)
+    model_id: str = Field(default="", max_length=120)
+
+
 class ChatStarterSettingsUpdate(BaseModel):
     """How much recent activity shapes the home screen's starting points.
 
@@ -854,6 +865,152 @@ async def update_network_settings(payload: NetworkSettingsUpdate):
         }
     )
     return _network_settings_payload()
+
+
+def _guest_trial_settings_payload() -> dict[str, Any]:
+    auth = get_runtime_settings_service().load_auth(include_process_overrides=False)
+    trial = dict(auth.get("guest_trial") or {})
+    selection = dict(trial.pop("llm_selection", {}) or {})
+    catalog = get_model_catalog_service().load()
+    from deeptutor.multi_user.model_access import is_owner_bound
+
+    owner_bound_profile_ids = {
+        str(profile.get("id") or "")
+        for profile in catalog.get("services", {}).get("llm", {}).get("profiles", []) or []
+        if isinstance(profile, dict) and is_owner_bound(profile)
+    }
+    model_options = [
+        option
+        for option in list_llm_options(catalog).get("options", [])
+        if str(option.get("profile_id") or "") not in owner_bound_profile_ids
+    ]
+    return {
+        "settings": {
+            **trial,
+            "profile_id": str(selection.get("profile_id") or ""),
+            "model_id": str(selection.get("model_id") or ""),
+        },
+        "policy": {
+            "client_type": "mobile",
+            "allowed_capabilities": ["chat"],
+            "allowed_tools": [],
+            "attachments_allowed": True,
+        },
+        "model_options": model_options,
+    }
+
+
+@router.get("/guest-trial")
+async def get_guest_trial_settings():
+    _require_settings_admin()
+    return _guest_trial_settings_payload()
+
+
+@router.put("/guest-trial")
+async def update_guest_trial_settings(payload: GuestTrialSettingsUpdate):
+    _require_settings_admin()
+    profile_id = payload.profile_id.strip()
+    model_id = payload.model_id.strip()
+    if payload.enabled and (not profile_id or not model_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A trial model is required before Guest access can be enabled.",
+        )
+    if profile_id or model_id:
+        from deeptutor.multi_user.model_access import is_owner_bound
+        from deeptutor.services.model_selection import (
+            LLMSelection,
+            apply_llm_selection_to_catalog,
+        )
+
+        catalog = get_model_catalog_service().load()
+        selected_profile = next(
+            (
+                profile
+                for profile in catalog.get("services", {})
+                .get("llm", {})
+                .get("profiles", [])
+                if isinstance(profile, dict) and str(profile.get("id") or "") == profile_id
+            ),
+            None,
+        )
+        if selected_profile is None or is_owner_bound(selected_profile):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The selected model cannot be used for Guest trials.",
+            )
+        try:
+            apply_llm_selection_to_catalog(
+                catalog,
+                LLMSelection(profile_id=profile_id, model_id=model_id),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The selected trial model is unavailable.",
+            ) from exc
+    service = get_runtime_settings_service()
+    current = service.load_auth(include_process_overrides=False)
+    service.save_auth(
+        {
+            **current,
+            "guest_trial": {
+                "enabled": payload.enabled,
+                "ttl_hours": payload.ttl_hours,
+                "turn_limit": payload.turn_limit,
+                "token_limit": payload.token_limit,
+                "cost_limit_usd": payload.cost_limit_usd,
+                "concurrent_turn_limit": payload.concurrent_turn_limit,
+                "llm_selection": {"profile_id": profile_id, "model_id": model_id},
+            },
+        }
+    )
+    return _guest_trial_settings_payload()
+
+
+@router.get("/guest-trials")
+async def list_guest_trials(limit: int = 50, offset: int = 0, trial_status: str = ""):
+    _require_settings_admin()
+    from deeptutor.services.trial import get_guest_trial_ledger
+
+    allowed_statuses = {
+        "",
+        "active",
+        "exhausted",
+        "expired",
+        "claiming",
+        "claimed",
+        "revoked",
+    }
+    if trial_status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unknown Guest trial status.",
+        )
+    return get_guest_trial_ledger().list_guests(
+        limit=max(1, min(limit, 200)),
+        offset=max(0, offset),
+        status=trial_status,
+    )
+
+
+@router.post("/guest-trials/{guest_id}/revoke")
+async def revoke_guest_trial(guest_id: str):
+    _require_settings_admin()
+    if not guest_id.startswith("gst_") or len(guest_id) > 80:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid Guest id.",
+        )
+    from deeptutor.services.trial import get_guest_trial_ledger
+
+    changed = get_guest_trial_ledger().revoke_guest(guest_id)
+    if not changed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Guest trial is being claimed, already claimed, revoked, or unavailable.",
+        )
+    return {"ok": True, "guest_id": guest_id, "status": "revoked"}
 
 
 def _chat_attachments_payload() -> dict[str, Any]:

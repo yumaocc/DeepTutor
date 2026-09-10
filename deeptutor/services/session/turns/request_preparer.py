@@ -87,6 +87,12 @@ class TurnRequestPreparer:
         payload = TurnRequest.model_validate(
             {key: value for key, value in payload.items() if key != "type"}
         ).to_payload()
+        from deeptutor.multi_user.context import get_current_user
+
+        current_user = get_current_user()
+        is_guest = current_user.subject_type == "guest"
+        if is_guest and payload.get("knowledge_bases"):
+            raise RuntimeError("guest_capability_forbidden")
         persona_explicit = "persona" in payload
         if not payload.get("language"):
             from deeptutor.services.settings.interface_settings import (
@@ -104,6 +110,8 @@ class TurnRequestPreparer:
             )
         else:
             routing_enabled = _coerce_bool(per_turn_auto_route, False)
+        if is_guest:
+            routing_enabled = False
         session = await self.store.ensure_session(payload.get("session_id"))
         preferences = session.get("preferences") or {}
 
@@ -133,6 +141,8 @@ class TurnRequestPreparer:
             )
 
         requested_capability = str(payload.get("capability") or "chat")
+        if is_guest and requested_capability != "chat":
+            raise RuntimeError("guest_capability_forbidden")
         capability_route = route_explicit_quiz_request(
             payload.get("content"),
             requested_capability,
@@ -170,6 +180,7 @@ class TurnRequestPreparer:
         payload = {
             **payload,
             "capability": capability,
+            "guest_trial": is_guest,
             "workspace_mode": workspace_mode,
             "course_id": requested_course_id,
             # Rendered here, where the course is already loaded and validated,
@@ -264,11 +275,54 @@ class TurnRequestPreparer:
         raw_llm_selection = payload.get("llm_selection")
         if raw_llm_selection is None:
             raw_llm_selection = preferences.get("llm_selection")
-        try:
-            llm_selection = _llm_selection_dict(raw_llm_selection)
-        except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
-        if llm_selection:
+        if is_guest:
+            from deeptutor.multi_user.model_access import admin_catalog
+            from deeptutor.multi_user.model_access import is_owner_bound
+            from deeptutor.services.config.runtime_settings import load_auth_settings
+            from deeptutor.services.model_selection import LLMSelection
+
+            trial_settings = dict(load_auth_settings().get("guest_trial") or {})
+            configured_selection = trial_settings.get("llm_selection")
+            try:
+                llm_selection = _llm_selection_dict(configured_selection)
+            except ValueError as exc:
+                raise RuntimeError("Guest trial model is not configured.") from exc
+            if not llm_selection:
+                raise RuntimeError("Guest trial model is not configured.")
+            catalog = admin_catalog()
+            selected_profile = next(
+                (
+                    profile
+                    for profile in catalog.get("services", {})
+                    .get("llm", {})
+                    .get("profiles", [])
+                    if isinstance(profile, dict)
+                    and str(profile.get("id") or "") == llm_selection.get("profile_id")
+                ),
+                None,
+            )
+            if selected_profile is None or is_owner_bound(selected_profile):
+                raise RuntimeError("Guest trial model is unavailable.")
+            try:
+                from deeptutor.services.model_selection import apply_llm_selection_to_catalog
+
+                apply_llm_selection_to_catalog(
+                    catalog,
+                    LLMSelection.from_payload(llm_selection),
+                )
+            except ValueError as exc:
+                raise RuntimeError("Guest trial model is unavailable.") from exc
+        else:
+            try:
+                llm_selection = _llm_selection_dict(raw_llm_selection)
+            except ValueError as exc:
+                raise RuntimeError(str(exc)) from exc
+        if is_guest:
+            # The administrator-funded selection was validated against the
+            # deployment catalog above. Guest identities never need a user
+            # model grant of their own.
+            pass
+        elif llm_selection:
             try:
                 from deeptutor.multi_user.model_access import apply_allowed_llm_selection
 
@@ -280,13 +334,11 @@ class TurnRequestPreparer:
             # never silently fall through to the global LLM client (which is
             # configured from admin runtime settings). Admin keeps the existing behavior
             # (None llm_selection → default config from admin scope).
-            from deeptutor.multi_user.context import get_current_user
             from deeptutor.multi_user.model_access import (
                 has_capability_access,
                 redacted_model_access,
             )
 
-            current_user = get_current_user()
             if not current_user.is_admin:
                 # Single gate, shared with the frontend lock and any HTTP
                 # surface: no usable LLM grant → a clear terminal error here
@@ -330,7 +382,9 @@ class TurnRequestPreparer:
         # preference so the chat pipeline sees the same set the user picked
         # in Settings. Callers that explicitly pass ``tools`` (including
         # an empty list) keep their value untouched.
-        if payload.get("tools") is None:
+        if is_guest:
+            payload = {**payload, "tools": [], "knowledge_bases": []}
+        elif payload.get("tools") is None:
             try:
                 from deeptutor.services.settings.interface_settings import (
                     get_enabled_optional_tools,
@@ -477,6 +531,33 @@ class TurnRequestPreparer:
                 with contextlib.suppress(Exception):
                     await self.coordinator.release_turn(lease)
             raise
+        trial_reservation_id = ""
+        if is_guest:
+            from deeptutor.services.config.runtime_settings import load_auth_settings
+            from deeptutor.services.trial import get_guest_trial_ledger
+
+            trial_settings = dict(load_auth_settings().get("guest_trial") or {})
+            trial_reservation_id = str(turn["id"])
+            try:
+                await asyncio.to_thread(
+                    get_guest_trial_ledger().reserve_turn,
+                    current_user.id,
+                    trial_reservation_id,
+                    concurrent_limit=int(trial_settings.get("concurrent_turn_limit", 1)),
+                )
+            except Exception as exc:
+                with contextlib.suppress(Exception):
+                    await self.store.transition_turn(
+                        turn["id"],
+                        "failed",
+                        error=str(exc),
+                        failure_code="rejected",
+                    )
+                if lease is not None and self.coordinator is not None:
+                    with contextlib.suppress(Exception):
+                        await self.coordinator.release_turn(lease)
+                raise
+            payload = {**payload, "trial_reservation_id": trial_reservation_id}
         execution = _TurnExecution(
             turn_id=turn["id"],
             session_id=session["id"],
@@ -493,6 +574,14 @@ class TurnRequestPreparer:
             if not update_blocked:
                 self._executions[turn["id"]] = execution
         if update_blocked:
+            if trial_reservation_id:
+                from deeptutor.services.trial import get_guest_trial_ledger
+
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(
+                        get_guest_trial_ledger().release_turn,
+                        trial_reservation_id,
+                    )
             with contextlib.suppress(Exception):
                 await self.store.transition_turn(
                     turn["id"],
@@ -584,6 +673,14 @@ class TurnRequestPreparer:
             if lease is not None and self.coordinator is not None:
                 with contextlib.suppress(Exception):
                     await self.coordinator.release_turn(lease)
+            if trial_reservation_id:
+                from deeptutor.services.trial import get_guest_trial_ledger
+
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(
+                        get_guest_trial_ledger().release_turn,
+                        trial_reservation_id,
+                    )
             raise
         return session, turn
 
